@@ -2,13 +2,14 @@ import { domElements } from './dom.js';
 import { initializeTimeTools } from './timeTools.js';
 import { loadCurrencies, setupCurrencyInputs } from './currency.js';
 import { setupSearch, toggleAdvancedSearch, initializeSearchSettings } from './search.js';
-import { loadShortcuts, renderShortcuts, addShortcut, deleteShortcut, toggleEditMode, toggleAddMode, handleAddShortcutKeyPress } from './shortcuts.js';
+import { loadShortcuts, renderShortcuts, addShortcut, deleteShortcut, toggleEditMode, toggleAddMode, handleAddShortcutKeyPress, getShortcutsConfig, setShortcutsConfig, setupClickOutsideListener } from './shortcuts.js';
 import { loadBottomBarConfig, toggleBottomBarEditMode } from './bottomBar.js';
 import { initializeThemeCustomizer } from './themeCustomizer.js';
 
 function init() {
     setupSearch();
     loadShortcuts();
+    setupClickOutsideListener();
     loadCurrencies();
     setupCurrencyInputs();
     initializeSearchSettings();
@@ -53,15 +54,9 @@ function init() {
     domElements.buttons.edit.textContent = 'Edit';
     domElements.buttons.edit.addEventListener('click', toggleEditMode);
 
-    domElements.buttons.new = document.createElement('button');
-    domElements.buttons.new.id = 'new-btn';
-    domElements.buttons.new.textContent = 'New';
-    domElements.buttons.new.addEventListener('click', toggleAddMode);
-
     buttonContainer.appendChild(domElements.buttons.import);
     buttonContainer.appendChild(domElements.buttons.export);
     buttonContainer.appendChild(domElements.buttons.edit);
-    buttonContainer.appendChild(domElements.buttons.new);
 
     const rightHalf = document.querySelector('.right-half');
     if (rightHalf) {
@@ -79,7 +74,7 @@ function init() {
 
 function exportAllSettings() {
     const allSettings = {
-        shortcuts: JSON.parse(localStorage.getItem('shortcutsConfig') || '{"shortcuts":[]}'),
+        shortcuts: getShortcutsConfig(), // Now exports the full container structure
         bottomBar: JSON.parse(localStorage.getItem('bottomBarConfig') || '{"langTools":[],"aiTools":[]}'),
         theme: localStorage.getItem('selectedTheme') || 'purple',
         searchEngine: localStorage.getItem('selectedSearchEngine') || 'google',
@@ -110,10 +105,9 @@ function importAllSettings() {
                 try {
                     const importedData = JSON.parse(e.target.result);
                     
-                    // Import shortcuts
+                    // Import shortcuts (supports both old and new format)
                     if (importedData.shortcuts) {
-                        localStorage.setItem('shortcutsConfig', JSON.stringify(importedData.shortcuts));
-                        loadShortcuts();
+                        setShortcutsConfig(importedData.shortcuts);
                     }
                     
                     // Import bottom bar
@@ -167,7 +161,6 @@ function setupBottomBarControls() {
     
     const controlsDiv = document.createElement('div');
     controlsDiv.className = 'bottom-bar-controls';
-    controlsDiv.style.cssText = 'display: flex; gap: 8px; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 12px;';
     
     const editBtn = document.createElement('button');
     editBtn.id = 'bottom-bar-edit-btn';

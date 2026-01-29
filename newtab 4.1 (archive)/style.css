@@ -42,6 +42,10 @@
     --spacing-md: 16px;
     --spacing-lg: 24px;
     --spacing-xl: 32px;
+    
+    /* Shortcut sizing (responsive) */
+    --shortcut-size: 56px;
+    --shortcut-font: 0.8rem;
 }
 
 /* ========== DEEP BLUE & GREY THEMES ========== */
@@ -451,6 +455,8 @@ body {
 .right-half {
     flex: 1 1 70%;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Search Bar */
@@ -965,9 +971,9 @@ button {
 
 .theme-customizer {
     position: absolute;
-    bottom: calc(100% + 12px);
+    top: calc(100% + 12px);
     right: 0;
-    background: var(--glass-bg);
+    background: var(--bg-tertiary);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
@@ -977,15 +983,15 @@ button {
     display: none;
     z-index: 1000;
     min-width: 280px;
-    max-height: 500px;
+    max-height: 400px;
     overflow-y: auto;
-    animation: slideUp 0.2s ease-out;
+    animation: slideDown 0.2s ease-out;
 }
 
-@keyframes slideUp {
+@keyframes slideDown {
     from {
         opacity: 0;
-        transform: translateY(10px);
+        transform: translateY(-10px);
     }
     to {
         opacity: 1;
@@ -1172,22 +1178,189 @@ button {
     justify-content: flex-end;
 }
 
+/* Shortcuts Wrapper - Grid layout for multiple containers */
+.shortcuts-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+    width: 100%;
+    align-items: stretch;
+    flex: 1;
+}
+
+.shortcuts-wrapper.edit-mode {
+    padding-bottom: var(--spacing-md);
+}
+
 .shortcuts-container {
     display: flex;
-    gap: var(--spacing-lg);
-    justify-content: center;
-    padding: var(--spacing-xl);
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-lg);
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius);
-    flex-wrap: wrap;
     transition: var(--transition);
+    position: relative;
+    flex: 1 1 calc(var(--container-width, 100%) - var(--spacing-md));
+    min-width: 280px;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .shortcuts-container:hover {
     background: var(--glass-bg);
+}
+
+.shortcuts-container.editable {
+    border: 2px dashed var(--accent-primary);
+}
+
+.shortcuts-container.drag-over {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: var(--accent-primary);
+}
+
+/* Container controls wrapper (bottom right) */
+.container-controls {
+    position: absolute;
+    bottom: var(--spacing-sm);
+    right: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    z-index: 10;
+}
+
+.delete-container-btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    transition: var(--transition-fast);
+    opacity: 0.8;
+}
+
+.delete-container-btn:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* Shortcuts grid inside container */
+.shortcuts-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-lg);
+    justify-content: center;
+    min-height: 80px;
+}
+
+/* Add shortcut button on each container */
+.add-shortcut-to-container {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: var(--accent-gradient);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    transition: var(--transition);
+    opacity: 0.8;
+}
+
+.add-shortcut-to-container:hover {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.add-shortcut-to-container.active {
+    opacity: 1;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+}
+
+.add-shortcut-to-container.active i {
+    transform: rotate(45deg);
+}
+
+.add-shortcut-to-container i {
+    transition: transform 0.2s ease;
+}
+
+/* Resize handle */
+.resize-handle {
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 48px;
+    background: var(--accent-gradient);
+    border-radius: 6px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.7rem;
+    opacity: 0.8;
+    transition: var(--transition-fast);
+    z-index: 20;
+}
+
+.resize-handle:hover {
+    opacity: 1;
+    transform: translateY(-50%) scaleY(1.2);
+}
+
+/* Add Container button */
+.add-container-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    min-width: 150px;
+    min-height: 120px;
+    border: 2px dashed var(--glass-border);
+    border-radius: var(--border-radius);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: var(--transition);
+    flex: 0 0 auto;
+}
+
+.add-container-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.add-container-btn i {
+    font-size: 1.5rem;
+}
+
+.add-container-btn span {
+    font-size: 0.85rem;
+    font-weight: 500;
 }
 
 .shortcut {
@@ -1214,8 +1387,8 @@ button {
 
 .shortcut a {
     display: block;
-    width: 56px;
-    height: 56px;
+    width: var(--shortcut-size, 56px);
+    height: var(--shortcut-size, 56px);
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -1239,9 +1412,13 @@ button {
 }
 
 .shortcut-name {
-    font-size: 0.8rem;
+    font-size: var(--shortcut-font, 0.8rem);
     color: var(--text-secondary);
     font-weight: 500;
+    max-width: calc(var(--shortcut-size, 56px) + 16px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .delete-shortcut-btn {
@@ -1484,36 +1661,39 @@ button {
 
 /* Bottom Bar Edit Mode */
 .bottom-bar-controls {
-    display: flex;
-    gap: 6px;
-    padding: 6px;
     background: var(--bg-tertiary);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
+    padding: 6px;
     border-radius: var(--border-radius);
-    align-self: center;
+    display: flex;
+    gap: 6px;
     transition: var(--transition);
+    align-items: center;
+}
+
+.bottom-bar-controls:hover {
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
 }
 
 .bottom-bar-edit-btn {
-    padding: var(--spacing-sm) var(--spacing-lg);
+    padding: 6px 12px;
     border: none;
-    background: var(--bg-tertiary);
+    background: transparent;
     color: var(--text-secondary);
     border-radius: var(--border-radius-sm);
     cursor: pointer;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     font-weight: 500;
     transition: var(--transition-fast);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
 }
 
 .bottom-bar-edit-btn:hover {
     background: var(--bg-secondary);
     color: var(--text-primary);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .bottom-bar-edit-btn.active {
@@ -1569,6 +1749,28 @@ button {
     .search-controls {
         display: none;
     }
+    
+    /* Slightly smaller shortcuts */
+    :root {
+        --shortcut-size: 52px;
+        --shortcut-font: 0.75rem;
+    }
+}
+
+@media screen and (max-width: 1200px) {
+    :root {
+        --shortcut-size: 48px;
+        --shortcut-font: 0.72rem;
+    }
+    
+    .shortcuts-grid {
+        gap: var(--spacing-md);
+    }
+    
+    .shortcuts-container {
+        padding: var(--spacing-md);
+        min-width: 220px;
+    }
 }
 
 @media screen and (max-width: 992px) {
@@ -1594,11 +1796,35 @@ button {
     .theme-wrapper {
         display: none;
     }
+    
+    :root {
+        --shortcut-size: 50px;
+        --shortcut-font: 0.72rem;
+    }
+    
+    .shortcuts-container {
+        min-width: 200px;
+    }
+    
+    .shortcuts-grid {
+        gap: var(--spacing-md);
+    }
 }
 
 @media screen and (max-width: 768px) {
     body {
         padding: 12px;
+    }
+    
+    :root {
+        --shortcut-size: 48px;
+        --shortcut-font: 0.7rem;
+    }
+    
+    /* Containers stack and fill width */
+    .shortcuts-container {
+        flex: 1 1 100% !important;
+        min-width: unset;
     }
     
     /* Keep bottom bar layout the same, just adjust alignment */
@@ -1610,17 +1836,57 @@ button {
     .section-items {
         justify-content: center;
     }
+    
+    /* Hide resize handle on smaller screens */
+    .resize-handle {
+        display: none;
+    }
 }
 
 @media screen and (max-width: 576px) {
-    .shortcuts-container {
-        gap: var(--spacing-md);
-        padding: var(--spacing-md);
+    body {
+        padding: 8px;
     }
     
-    .shortcut a {
-        width: 60px;
-        height: 60px;
+    :root {
+        --shortcut-size: 44px;
+        --shortcut-font: 0.65rem;
+    }
+    
+    .shortcuts-container {
+        gap: var(--spacing-sm);
+        padding: var(--spacing-sm);
+    }
+    
+    .shortcuts-grid {
+        gap: var(--spacing-sm);
+    }
+    
+    .container-controls {
+        bottom: var(--spacing-xs);
+        right: var(--spacing-xs);
+    }
+    
+    .add-shortcut-to-container,
+    .delete-container-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.75rem;
+    }
+}
+
+@media screen and (max-width: 420px) {
+    :root {
+        --shortcut-size: 40px;
+        --shortcut-font: 0.6rem;
+    }
+    
+    .shortcut {
+        gap: 4px;
+    }
+    
+    .shortcuts-grid {
+        gap: 10px;
     }
 }
 

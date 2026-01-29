@@ -12,7 +12,8 @@ export const domElements = {
     },
     advancedSearch: document.getElementById('advanced-search'),
     shortcuts: {
-        container: document.getElementById('shortcuts-container'),
+        wrapper: document.getElementById('shortcuts-wrapper'),
+        container: document.getElementById('shortcuts-wrapper'), // Alias for compatibility
         addForm: document.querySelector('.add-shortcut'),
         newName: document.getElementById('new-shortcut-name'),
         newUrl: document.getElementById('new-shortcut-url'),
