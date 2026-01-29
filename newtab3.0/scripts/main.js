@@ -3,12 +3,10 @@ import { initializeTimeTools } from './timeTools.js';
 import { loadCurrencies, setupCurrencyInputs } from './currency.js';
 import { setupSearch, toggleAdvancedSearch, initializeSearchSettings } from './search.js';
 import { loadShortcuts, renderShortcuts, addShortcut, deleteShortcut, toggleEditMode, toggleAddMode, handleAddShortcutKeyPress } from './shortcuts.js';
-import { startClock } from './clock.js';
 import { loadBottomBarConfig, toggleBottomBarEditMode } from './bottomBar.js';
 import { initializeThemeCustomizer } from './themeCustomizer.js';
 
 function init() {
-    startClock();
     setupSearch();
     loadShortcuts();
     loadCurrencies();

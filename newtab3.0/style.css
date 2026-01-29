@@ -372,7 +372,7 @@ body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    padding: var(--spacing-lg);
+    padding: 12px;
     overflow-x: hidden;
     transition: background 0.5s ease;
 }
@@ -420,9 +420,8 @@ body {
 .top-section {
     display: flex;
     width: 100%;
-    max-width: 1600px;
-    margin: 0 auto var(--spacing-xl);
-    gap: var(--spacing-lg);
+    margin: 0 0 12px;
+    gap: 8px;
     animation: fadeInUp 0.2s ease-out;
 }
 
@@ -439,85 +438,35 @@ body {
 
 .left-half,
 .right-half {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-lg);
+    gap: 12px;
 }
 
-/* Digital Clock */
-#digital-clock {
-    background: var(--glass-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
-    padding: var(--spacing-xl);
-    border-radius: var(--border-radius-lg);
-    text-align: center;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 4rem;
-    font-weight: 300;
-    letter-spacing: 0.05em;
-    transition: var(--transition);
-    position: relative;
-    overflow: hidden;
+.left-half {
+    flex: 0 0 30%;
+    max-width: 30%;
 }
 
-#digital-clock::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
-    opacity: 0.2;
-    transition: left 0.5s;
-}
-
-#digital-clock:hover::before {
-    left: 100%;
-}
-
-#digital-clock:hover {
-    background: var(--glass-bg);
-    border-color: var(--accent-primary);
-    box-shadow: 0 8px 32px var(--accent-glow);
-}
-
-#digi-hours,
-#digi-minutes {
-    color: var(--text-primary);
-    text-shadow: 0 0 20px var(--accent-glow);
-}
-
-#digi-colon {
-    color: var(--accent-primary);
-    margin: 0 8px;
-    animation: blink 1s infinite;
-}
-
-@keyframes blink {
-    0%, 49% { opacity: 1; }
-    50%, 100% { opacity: 0.3; }
-}
-
-#am-pm {
-    font-size: 1.5rem;
-    color: var(--text-secondary);
-    margin-left: var(--spacing-sm);
-    vertical-align: middle;
+.right-half {
+    flex: 1 1 70%;
+    min-width: 0;
 }
 
 /* Search Bar */
 .search-bar {
-    display: flex;
-    gap: var(--spacing-sm);
+    --control-height: 36px;
+    display: grid;
+    grid-template-columns: 1fr auto auto auto;
+    grid-template-areas: "input select search advanced";
+    align-items: center;
+    flex-shrink: 0;
+    gap: var(--spacing-xs);
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
-    padding: var(--spacing-md);
+    padding: 12px;
     border-radius: var(--border-radius-lg);
     transition: var(--transition);
 }
@@ -531,15 +480,19 @@ body {
 
 #search-q {
     flex: 1;
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     border: none;
     background: var(--bg-tertiary);
-    font-size: 1rem;
+    font-size: 0.9rem;
+    min-width: 0;
     outline: none;
     color: var(--text-primary);
     border-radius: var(--border-radius-sm);
     transition: var(--transition-fast);
     font-family: 'Inter', sans-serif;
+    height: 36px;
+    grid-area: input;
+    text-align: left;
 }
 
 #search-q:focus {
@@ -552,15 +505,17 @@ body {
 }
 
 .compact-select {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
     border: none;
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border-radius: var(--border-radius-sm);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     cursor: pointer;
     transition: var(--transition-fast);
     font-family: 'Inter', sans-serif;
+    height: 36px;
+    grid-area: select;
 }
 
 .compact-select:hover {
@@ -595,6 +550,26 @@ button {
     transition: var(--transition);
     position: relative;
     overflow: hidden;
+}
+
+.search-bar #search-btn,
+.search-bar #advanced-btn {
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.85rem;
+    height: 36px;
+}
+
+#search-btn {
+    grid-area: search;
+    justify-self: center;
+    align-self: center;
+    text-align: center;
+}
+
+.search-controls {
+    display: flex;
+    align-items: center;
+    grid-area: advanced;
 }
 
 #search-btn::before,
@@ -747,7 +722,8 @@ button {
 /* Tools Row */
 .tools-row {
     display: flex;
-    gap: var(--spacing-lg);
+    flex-direction: column;
+    gap: 12px;
     width: 100%;
     position: relative;
 }
@@ -755,11 +731,12 @@ button {
 .currency-exchanger,
 .time-tools {
     flex: 1;
+    min-width: 0;
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
-    padding: var(--spacing-lg);
+    padding: var(--spacing-md);
     border-radius: var(--border-radius);
     transition: var(--transition);
 }
@@ -776,22 +753,25 @@ button {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-sm);
+    min-width: 0;
 }
 
 .currency-row {
     display: flex;
     align-items: center;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
 }
 
 .exchange-form select {
-    width: 80px;
+    width: 84px;
+    flex: 0 0 84px;
     padding: var(--spacing-sm);
     border: none;
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border-radius: var(--border-radius-sm);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     transition: var(--transition-fast);
     cursor: pointer;
     font-family: 'Inter', sans-serif;
@@ -802,21 +782,79 @@ button {
     background: var(--bg-secondary);
 }
 
-.exchange-form input[type="number"] {
+.input-with-spinner {
     flex: 1;
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    position: relative;
+}
+
+.exchange-form input[type="text"] {
+    flex: 1;
+    min-width: 0;
     padding: var(--spacing-sm);
+    padding-right: 24px;
     border: none;
     background: var(--bg-tertiary);
     color: var(--text-primary);
     border-radius: var(--border-radius-sm);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     transition: var(--transition-fast);
     font-family: 'Inter', sans-serif;
 }
 
-.exchange-form input[type="number"]:focus {
+.exchange-form input[type="text"]:focus {
     outline: 1px solid var(--accent-primary);
     background: var(--bg-secondary);
+}
+
+.spinner-buttons {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out;
+    pointer-events: none;
+}
+
+.input-with-spinner:hover .spinner-buttons {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.input-with-spinner:focus-within .spinner-buttons {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.spinner-btn {
+    width: 22px;
+    height: 14px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    font-size: 10px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+    border-radius: 1px;
+}
+
+.spinner-btn:hover {
+    color: var(--accent-primary);
+}
+
+.spinner-btn:active {
+    transform: scale(0.85);
 }
 
 /* Time Tools */
@@ -834,14 +872,14 @@ button {
 }
 
 .toggle-btn {
-    padding: var(--spacing-xs) var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
     border: none;
     background: var(--bg-tertiary);
     color: var(--text-secondary);
     cursor: pointer;
     border-radius: var(--border-radius-sm);
     transition: var(--transition-fast);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-weight: 500;
 }
 
@@ -857,14 +895,14 @@ button {
 
 .start-stop,
 .reset {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
     border: none;
     background: var(--accent-gradient);
     color: var(--text-primary);
     border-radius: var(--border-radius-sm);
     cursor: pointer;
     transition: var(--transition);
-    font-size: 1rem;
+    font-size: 0.9rem;
 }
 
 .start-stop:hover,
@@ -884,10 +922,10 @@ button {
 .stopwatch .display,
 .timer .display {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 2rem;
+    font-size: 1.6rem;
     text-align: center;
     color: var(--text-primary);
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     border-radius: var(--border-radius-sm);
     background: var(--bg-tertiary);
     white-space: nowrap;
@@ -1176,13 +1214,13 @@ button {
 
 .shortcut a {
     display: block;
-    width: 80px;
-    height: 80px;
+    width: 56px;
+    height: 56px;
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
-    padding: var(--spacing-md);
+    padding: var(--spacing-sm);
     border-radius: var(--border-radius);
     transition: var(--transition);
 }
@@ -1201,7 +1239,7 @@ button {
 }
 
 .shortcut-name {
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     color: var(--text-secondary);
     font-weight: 500;
 }
@@ -1292,8 +1330,8 @@ button {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: var(--spacing-md);
-    gap: var(--spacing-md);
+    padding: 8px;
+    gap: 8px;
     background: var(--glass-bg);
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
@@ -1329,10 +1367,10 @@ button {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
-    padding: var(--spacing-sm);
+    padding: 6px;
     border-radius: var(--border-radius);
     display: flex;
-    gap: var(--spacing-sm);
+    gap: 6px;
     transition: var(--transition);
     flex-wrap: wrap;
     min-height: 50px;
@@ -1378,13 +1416,13 @@ button {
 .ai-tool {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-xs);
+    gap: 4px;
     text-decoration: none;
     color: var(--text-secondary);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: 4px 6px;
     border-radius: var(--border-radius-sm);
     transition: var(--transition-fast);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     font-weight: 500;
     white-space: nowrap;
     position: relative;
@@ -1410,8 +1448,8 @@ button {
 }
 
 .ai-tool img {
-    width: 20px;
-    height: 20px;
+    width: 16px;
+    height: 16px;
     border-radius: 4px;
 }
 
@@ -1447,9 +1485,15 @@ button {
 /* Bottom Bar Edit Mode */
 .bottom-bar-controls {
     display: flex;
-    gap: var(--spacing-xs);
-    padding: var(--spacing-xs);
+    gap: 6px;
+    padding: 6px;
+    background: var(--bg-tertiary);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--border-radius);
     align-self: center;
+    transition: var(--transition);
 }
 
 .bottom-bar-edit-btn {
@@ -1512,16 +1556,33 @@ button {
     .advanced-search {
         display: none;
     }
+
+    #search-engine-select {
+        display: none;
+    }
+
+    .search-bar {
+        grid-template-columns: 1fr auto;
+        grid-template-areas: "input search";
+    }
+
+    .search-controls {
+        display: none;
+    }
 }
 
 @media screen and (max-width: 992px) {
     .top-section {
         flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
     }
-    
-    #digital-clock {
-        font-size: 3rem;
-        padding: var(--spacing-lg);
+
+    .left-half,
+    .right-half {
+        flex: 1 1 auto;
+        max-width: 100%;
+        gap: 8px;
     }
     
     .currency-exchanger,
@@ -1537,7 +1598,7 @@ button {
 
 @media screen and (max-width: 768px) {
     body {
-        padding: var(--spacing-sm);
+        padding: 12px;
     }
     
     /* Keep bottom bar layout the same, just adjust alignment */
@@ -1552,14 +1613,6 @@ button {
 }
 
 @media screen and (max-width: 576px) {
-    #digital-clock {
-        font-size: 2.5rem;
-    }
-    
-    .search-bar {
-        flex-direction: column;
-    }
-    
     .shortcuts-container {
         gap: var(--spacing-md);
         padding: var(--spacing-md);
@@ -1585,4 +1638,15 @@ button {
     background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
     background-size: 1000px 100%;
     animation: shimmer 2s infinite;
+}
+
+@media screen and (max-width: 520px) {
+    .search-bar {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            "input"
+            "search"
+            "advanced";
+    }
+
 }

@@ -11,14 +11,6 @@
 <body>
     <div class="top-section">
         <div class="left-half">
-            <!-- Digital Clock -->
-            <div id="digital-clock" class="glass-card">
-                <span id="digi-hours">00</span>
-                <span id="digi-colon">:</span>
-                <span id="digi-minutes">00</span>
-                <span id="am-pm">PM</span>
-            </div>
-
             <!-- Search Bar -->
             <div class="search-bar glass-card">
                 <input type="text" id="search-q" placeholder="Search the web...">
@@ -83,11 +75,23 @@
                     <form class="exchange-form">
                         <div class="currency-row">
                             <select id="from-currency"></select>
-                            <input type="number" id="amount" step="any" min="0" placeholder="Amount">
+                            <div class="input-with-spinner">
+                                <input type="text" id="amount" inputmode="decimal" placeholder="Amount">
+                                <div class="spinner-buttons">
+                                    <button type="button" class="spinner-btn spinner-up" data-target="amount">▲</button>
+                                    <button type="button" class="spinner-btn spinner-down" data-target="amount">▼</button>
+                                </div>
+                            </div>
                         </div>
                         <div class="currency-row">
                             <select id="to-currency"></select>
-                            <input type="number" id="result" step="any" min="0" placeholder="Result">
+                            <div class="input-with-spinner">
+                                <input type="text" id="result" inputmode="decimal" placeholder="Result">
+                                <div class="spinner-buttons">
+                                    <button type="button" class="spinner-btn spinner-up" data-target="result">▲</button>
+                                    <button type="button" class="spinner-btn spinner-down" data-target="result">▼</button>
+                                </div>
+                            </div>
                         </div>
                     </form>
                 </div>

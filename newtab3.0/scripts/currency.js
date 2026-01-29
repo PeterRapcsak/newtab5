@@ -4,6 +4,21 @@ export const exchangeRateCache = {};
 export const CACHE_EXPIRATION = 3600000;
 export let lastEditedInput = 'amount';
 
+// Format number with dots as thousand separators (whole numbers only)
+function formatWithDots(value) {
+    if (!value && value !== 0) return '';
+    // Round to whole number and add thousand separators
+    const rounded = Math.round(Number(value));
+    return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+}
+
+// Parse formatted number back to float (remove thousand separators)
+function parseFormattedNumber(str) {
+    if (!str) return NaN;
+    // Remove thousand separators (dots)
+    return parseFloat(str.replace(/\./g, ''));
+}
+
 export async function loadCurrencies() {
     try {
         const response = await fetch('https://api.frankfurter.app/currencies');
@@ -39,13 +54,13 @@ export async function convertCurrency(source) {
     let amount, result;
 
     if (source === 'amount') {
-        amount = parseFloat(domElements.currency.amountInput?.value);
+        amount = parseFormattedNumber(domElements.currency.amountInput?.value);
         if (isNaN(amount) || amount < 0) {
             domElements.currency.resultInput.value = '';
             return;
         }
     } else {
-        result = parseFloat(domElements.currency.resultInput?.value);
+        result = parseFormattedNumber(domElements.currency.resultInput?.value);
         if (isNaN(result) || result < 0) {
             domElements.currency.amountInput.value = '';
             return;
@@ -59,10 +74,10 @@ export async function convertCurrency(source) {
         const rate = exchangeRateCache[cacheKey].rate;
         if (source === 'amount') {
             result = amount * rate;
-            domElements.currency.resultInput.value = result.toFixed(2);
+            domElements.currency.resultInput.value = formatWithDots(result);
         } else {
             amount = result / rate;
-            domElements.currency.amountInput.value = amount.toFixed(2);
+            domElements.currency.amountInput.value = formatWithDots(amount);
         }
     } else {
         try {
@@ -72,10 +87,10 @@ export async function convertCurrency(source) {
             exchangeRateCache[cacheKey] = { rate, timestamp: now };
             if (source === 'amount') {
                 result = amount * rate;
-                domElements.currency.resultInput.value = result.toFixed(2);
+                domElements.currency.resultInput.value = formatWithDots(result);
             } else {
                 amount = result / rate;
-                domElements.currency.amountInput.value = amount.toFixed(2);
+                domElements.currency.amountInput.value = formatWithDots(amount);
             }
         } catch (error) {
             console.error('Error fetching exchange rate:', error);
@@ -85,10 +100,55 @@ export async function convertCurrency(source) {
     }
 }
 
+// Format input value live as user types (whole numbers only)
+function formatInputLive(input) {
+    const cursorPos = input.selectionStart;
+    const oldValue = input.value;
+    const oldLength = oldValue.length;
+    
+    // Remove everything except digits
+    let rawValue = oldValue.replace(/[^\d]/g, '');
+    
+    // Format with dots as thousand separators
+    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    input.value = formattedValue;
+    
+    // Adjust cursor position
+    const newLength = formattedValue.length;
+    const diff = newLength - oldLength;
+    const newCursorPos = Math.max(0, cursorPos + diff);
+    input.setSelectionRange(newCursorPos, newCursorPos);
+}
+
+// Handle spinner button clicks
+function setupSpinnerButtons() {
+    const spinnerButtons = document.querySelectorAll('.spinner-btn');
+    spinnerButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const targetId = btn.dataset.target;
+            const input = document.getElementById(targetId);
+            if (!input) return;
+            
+            const currentValue = parseFormattedNumber(input.value) || 0;
+            const isUp = btn.classList.contains('spinner-up');
+            const newValue = isUp ? currentValue + 1 : Math.max(0, currentValue - 1);
+            
+            input.value = formatWithDots(newValue);
+            
+            // Trigger conversion
+            lastEditedInput = targetId;
+            convertCurrency(targetId);
+        });
+    });
+}
+
 export function setupCurrencyInputs() {
     let debounceTimer;
     if (domElements.currency.amountInput) {
         domElements.currency.amountInput.addEventListener('input', () => {
+            formatInputLive(domElements.currency.amountInput);
             lastEditedInput = 'amount';
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -98,6 +158,7 @@ export function setupCurrencyInputs() {
     }
     if (domElements.currency.resultInput) {
         domElements.currency.resultInput.addEventListener('input', () => {
+            formatInputLive(domElements.currency.resultInput);
             lastEditedInput = 'result';
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
@@ -121,4 +182,7 @@ export function setupCurrencyInputs() {
             }, 300);
         });
     }
+    
+    // Setup spinner buttons
+    setupSpinnerButtons();
 }
