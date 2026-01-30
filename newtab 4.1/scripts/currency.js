@@ -4,19 +4,23 @@ export const exchangeRateCache = {};
 export const CACHE_EXPIRATION = 3600000;
 export let lastEditedInput = 'amount';
 
-// Format number with dots as thousand separators (whole numbers only)
+// Format number with dots as thousand separators (preserves decimals)
 function formatWithDots(value) {
     if (!value && value !== 0) return '';
-    // Round to whole number and add thousand separators
-    const rounded = Math.round(Number(value));
-    return rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const num = Number(value);
+    // Split into integer and decimal parts
+    const [intPart, decPart] = num.toString().split('.');
+    // Add thousand separators to integer part
+    const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    // Return with decimal part if it exists (max 2 decimal places for display)
+    return decPart ? `${formattedInt},${decPart.slice(0, 2)}` : formattedInt;
 }
 
-// Parse formatted number back to float (remove thousand separators)
+// Parse formatted number back to float (remove thousand separators, handle decimal comma)
 function parseFormattedNumber(str) {
     if (!str) return NaN;
-    // Remove thousand separators (dots)
-    return parseFloat(str.replace(/\./g, ''));
+    // Remove thousand separators (dots) and replace decimal comma with dot
+    return parseFloat(str.replace(/\./g, '').replace(',', '.'));
 }
 
 export async function loadCurrencies() {
@@ -100,17 +104,31 @@ export async function convertCurrency(source) {
     }
 }
 
-// Format input value live as user types (whole numbers only)
+// Format input value live as user types (allows decimals with comma)
 function formatInputLive(input) {
     const cursorPos = input.selectionStart;
     const oldValue = input.value;
     const oldLength = oldValue.length;
     
-    // Remove everything except digits
-    let rawValue = oldValue.replace(/[^\d]/g, '');
+    // Remove everything except digits and comma (for decimal)
+    let rawValue = oldValue.replace(/[^\d,]/g, '');
     
-    // Format with dots as thousand separators
-    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    // Only allow one comma
+    const commaIndex = rawValue.indexOf(',');
+    if (commaIndex !== -1) {
+        const beforeComma = rawValue.slice(0, commaIndex).replace(/,/g, '');
+        const afterComma = rawValue.slice(commaIndex + 1).replace(/,/g, '').slice(0, 2);
+        rawValue = beforeComma + ',' + afterComma;
+    }
+    
+    // Split by comma to format integer part only
+    const [intPart, decPart] = rawValue.split(',');
+    
+    // Format integer part with dots as thousand separators
+    const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    // Combine back
+    const formattedValue = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt;
     
     input.value = formattedValue;
     
