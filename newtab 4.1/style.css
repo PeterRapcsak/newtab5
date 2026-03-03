@@ -1916,3 +1916,308 @@ button {
     }
 
 }
+
+/* ========== LOW DETAIL MODE TOGGLE UI ========== */
+.settings-section {
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--glass-border);
+    margin-bottom: var(--spacing-md);
+}
+
+.toggle-setting {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-setting input[type="checkbox"] {
+    display: none;
+}
+
+.toggle-slider {
+    width: 40px;
+    height: 22px;
+    background: var(--bg-tertiary);
+    border-radius: 11px;
+    position: relative;
+    transition: background 0.2s ease;
+    flex-shrink: 0;
+}
+
+.toggle-slider::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.toggle-setting input:checked + .toggle-slider {
+    background: var(--accent-primary);
+}
+
+.toggle-setting input:checked + .toggle-slider::after {
+    transform: translateX(18px);
+    background: var(--text-primary);
+}
+
+.toggle-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.setting-description {
+    font-size: 0.75rem;
+    color: var(--text-tertiary);
+    margin-top: var(--spacing-xs);
+}
+
+/* ========== LOW DETAIL MODE ========== */
+/* Performance optimizations: solid colors, no animations, simple hover effects */
+
+.low-detail {
+    /* Remove all transitions globally */
+    --transition: none;
+    --transition-fast: none;
+}
+
+/* Solid background - no gradient */
+.low-detail body {
+    background: var(--bg-primary);
+    animation: none;
+}
+
+/* Disable all keyframe animations */
+.low-detail *,
+.low-detail *::before,
+.low-detail *::after {
+    animation: none !important;
+    transition: none !important;
+}
+
+/* Remove backdrop-filter (expensive GPU operation) */
+.low-detail .glass-card,
+.low-detail .search-bar,
+.low-detail .advanced-search,
+.low-detail .currency-exchanger,
+.low-detail .time-tools,
+.low-detail .shortcuts-container,
+.low-detail .theme-customizer,
+.low-detail .theme-toggle-btn,
+.low-detail .bottom-section,
+.low-detail .section-items,
+.low-detail .bottom-bar-controls,
+.low-detail .add-shortcut,
+.low-detail .shortcut a {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-secondary);
+}
+
+/* Simple solid hover states - subtle outline only */
+.low-detail .glass-card:hover {
+    transform: none;
+    box-shadow: none;
+    background: var(--bg-secondary);
+    border-color: var(--accent-primary);
+}
+
+.low-detail .search-bar:hover,
+.low-detail .search-bar:focus-within {
+    box-shadow: none;
+    border-color: var(--accent-primary);
+}
+
+.low-detail .currency-exchanger:hover,
+.low-detail .time-tools:hover {
+    transform: none;
+    border-color: var(--accent-primary);
+}
+
+/* Shortcut hover - simple outline */
+.low-detail .shortcut a:hover {
+    transform: none;
+    box-shadow: none;
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+/* Buttons - solid colors, simple hover */
+.low-detail #search-btn,
+.low-detail #advanced-btn,
+.low-detail .action-btn,
+.low-detail #edit-btn,
+.low-detail #new-btn,
+.low-detail #import-btn,
+.low-detail #add-shortcut-btn,
+.low-detail .toggle-btn.active,
+.low-detail .start-stop,
+.low-detail .reset,
+.low-detail .add-shortcut-to-container,
+.low-detail .bottom-bar-edit-btn.active {
+    background: var(--accent-primary);
+}
+
+/* Remove button shine animation pseudo-element */
+.low-detail #search-btn::before,
+.low-detail #advanced-btn::before,
+.low-detail .action-btn::before,
+.low-detail #edit-btn::before,
+.low-detail #new-btn::before,
+.low-detail #import-btn::before,
+.low-detail #add-shortcut-btn::before {
+    display: none;
+}
+
+.low-detail #search-btn:hover,
+.low-detail #advanced-btn:hover,
+.low-detail .action-btn:hover,
+.low-detail #edit-btn:hover,
+.low-detail #new-btn:hover,
+.low-detail #import-btn:hover,
+.low-detail #add-shortcut-btn:hover,
+.low-detail .start-stop:hover,
+.low-detail .reset:hover {
+    transform: none;
+    box-shadow: none;
+    opacity: 0.85;
+}
+
+/* Theme toggle button */
+.low-detail .theme-toggle-btn:hover {
+    transform: none;
+    border-color: var(--accent-primary);
+}
+
+/* Theme options - simple border hover */
+.low-detail .theme-option {
+    background: var(--accent-primary);
+}
+
+.low-detail .theme-option:hover {
+    transform: none;
+    border-color: var(--text-secondary);
+}
+
+/* Keep theme colors visible - restore gradients just for swatches */
+.low-detail .theme-option[data-theme="blue-deep"] { background: #1e40af; }
+.low-detail .theme-option[data-theme="blue-navy"] { background: #1e3a8a; }
+.low-detail .theme-option[data-theme="blue-midnight"] { background: #0284c7; }
+.low-detail .theme-option[data-theme="grey-deep"] { background: #4b5563; }
+.low-detail .theme-option[data-theme="grey-slate"] { background: #475569; }
+.low-detail .theme-option[data-theme="grey-charcoal"] { background: #3f3f46; }
+.low-detail .theme-option[data-theme="blue"] { background: #3b82f6; }
+.low-detail .theme-option[data-theme="blue-steel"] { background: #0891b2; }
+.low-detail .theme-option[data-theme="blue-ocean"] { background: #0369a1; }
+.low-detail .theme-option[data-theme="grey"] { background: #6b7280; }
+.low-detail .theme-option[data-theme="grey-chrome"] { background: #8ab4f8; }
+.low-detail .theme-option[data-theme="grey-silver"] { background: #9ca3af; }
+.low-detail .theme-option[data-theme="blue-sky"] { background: #60a5fa; }
+.low-detail .theme-option[data-theme="blue-ice"] { background: #38bdf8; }
+.low-detail .theme-option[data-theme="blue-frost"] { background: #22d3ee; }
+.low-detail .theme-option[data-theme="grey-light"] { background: #9ca3af; }
+.low-detail .theme-option[data-theme="grey-mist"] { background: #a8a29e; }
+.low-detail .theme-option[data-theme="grey-pearl"] { background: #cbd5e1; }
+.low-detail .theme-option[data-theme="purple"] { background: #667eea; }
+.low-detail .theme-option[data-theme="green"] { background: #10b981; }
+.low-detail .theme-option[data-theme="red"] { background: #ef4444; }
+.low-detail .theme-option[data-theme="orange"] { background: #f97316; }
+.low-detail .theme-option[data-theme="pink"] { background: #ec4899; }
+.low-detail .theme-option[data-theme="teal"] { background: #14b8a6; }
+
+/* Timer display - no glow effects */
+.low-detail .stopwatch .display,
+.low-detail .timer .display {
+    text-shadow: none;
+}
+
+.low-detail .timer .display.running,
+.low-detail .stopwatch .display.running {
+    box-shadow: none;
+    border: 1px solid var(--accent-primary);
+}
+
+/* Bottom bar items - simple hover */
+.low-detail .ai-tool:hover {
+    transform: none;
+    background: var(--bg-tertiary);
+}
+
+.low-detail .section-items:hover {
+    border-color: var(--accent-primary);
+}
+
+/* Bottom bar controls */
+.low-detail .bottom-bar-controls:hover {
+    border-color: var(--accent-primary);
+}
+
+/* Input focus - simple outline */
+.low-detail #search-q:focus,
+.low-detail .exchange-form input[type="text"]:focus,
+.low-detail .exchange-form select:focus,
+.low-detail #new-shortcut-name:focus,
+.low-detail #new-shortcut-url:focus {
+    box-shadow: none;
+    outline: 2px solid var(--accent-primary);
+    outline-offset: -2px;
+}
+
+/* Remove loading shimmer animation */
+.low-detail .loading {
+    background: var(--bg-tertiary);
+}
+
+/* Shortcuts - instant visibility, no fade-in */
+.low-detail .shortcut {
+    opacity: 1;
+}
+
+/* Delete buttons - keep functional styling */
+.low-detail .delete-shortcut-btn:hover,
+.low-detail .delete-container-btn:hover,
+.low-detail .delete-section-btn-corner:hover,
+.low-detail .delete-tool-btn:hover {
+    transform: none;
+    box-shadow: none;
+    opacity: 0.85;
+}
+
+/* Spinner buttons */
+.low-detail .spinner-btn:active {
+    transform: none;
+}
+
+/* Compact checkboxes */
+.low-detail .compact-checkboxes label:hover {
+    background: var(--bg-tertiary);
+}
+
+/* Add container button */
+.low-detail .add-container-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--accent-primary);
+}
+
+/* Resize handle */
+.low-detail .resize-handle:hover {
+    transform: translateY(-50%);
+}
+
+/* New section button */
+.low-detail .new-section-btn:hover {
+    transform: none;
+    background: var(--bg-tertiary);
+}
+
+/* Scrollbar - simpler */
+.low-detail ::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-primary);
+}

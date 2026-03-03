@@ -77,6 +77,7 @@ function exportAllSettings() {
         shortcuts: getShortcutsConfig(), // Now exports the full container structure
         bottomBar: JSON.parse(localStorage.getItem('bottomBarConfig') || '{"langTools":[],"aiTools":[]}'),
         theme: localStorage.getItem('selectedTheme') || 'purple',
+        lowDetailMode: localStorage.getItem('lowDetailMode') === 'true',
         searchEngine: localStorage.getItem('selectedSearchEngine') || 'google',
         currencies: {
             from: localStorage.getItem('fromCurrency') || 'USD',
@@ -120,6 +121,12 @@ function importAllSettings() {
                     if (importedData.theme) {
                         localStorage.setItem('selectedTheme', importedData.theme);
                         document.documentElement.setAttribute('data-theme', importedData.theme);
+                    }
+                    
+                    // Import low detail mode
+                    if (importedData.lowDetailMode !== undefined) {
+                        localStorage.setItem('lowDetailMode', importedData.lowDetailMode);
+                        document.documentElement.classList.toggle('low-detail', importedData.lowDetailMode);
                     }
                     
                     // Import search engine

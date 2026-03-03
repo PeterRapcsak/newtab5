@@ -6,6 +6,17 @@ export function initializeThemeCustomizer() {
     const customizerPanel = document.createElement('div');
     customizerPanel.className = 'theme-customizer';
     customizerPanel.innerHTML = `
+        <h3>Settings</h3>
+        
+        <div class="theme-section settings-section">
+            <label class="toggle-setting">
+                <input type="checkbox" id="low-detail-toggle">
+                <span class="toggle-slider"></span>
+                <span class="toggle-label">Low Detail Mode</span>
+            </label>
+            <p class="setting-description">Reduces animations and effects for better performance</p>
+        </div>
+
         <h3>Color Theme</h3>
         
         <div class="theme-section">
@@ -78,6 +89,22 @@ export function initializeThemeCustomizer() {
     // Load saved theme
     const savedTheme = localStorage.getItem('selectedTheme') || 'grey';
     applyTheme(savedTheme);
+
+    // Load and apply Low Detail Mode setting
+    const lowDetailToggle = customizerPanel.querySelector('#low-detail-toggle');
+    const savedLowDetail = localStorage.getItem('lowDetailMode') === 'true';
+    lowDetailToggle.checked = savedLowDetail;
+    applyLowDetailMode(savedLowDetail);
+
+    lowDetailToggle.addEventListener('change', () => {
+        const isEnabled = lowDetailToggle.checked;
+        localStorage.setItem('lowDetailMode', isEnabled);
+        applyLowDetailMode(isEnabled);
+    });
+
+    function applyLowDetailMode(enabled) {
+        document.documentElement.classList.toggle('low-detail', enabled);
+    }
 
     // Toggle panel visibility
     gearButton.addEventListener('click', (e) => {
