@@ -1,13 +1,21 @@
-// Pomodoro: work/break cycle timer, now a third mode inside the Time Tools
-// card (alongside Stopwatch/Timer) rather than its own floating widget —
-// timeTools.js drives the shared Start/Pause + Reset buttons and calls
-// toggleRunning()/resetTimer()/isRunning() here for whichever tool is
-// active. Survives newtab reloads by storing an absolute end timestamp
-// (not a running interval) — the countdown is recomputed from real elapsed
-// time on every load or tick, so closing and reopening the tab doesn't
-// reset or desync it. When a phase ends it automatically advances to the
-// next one (short break → work → short break → ... → long break) and
-// keeps running, unless paused.
+/*======================================================================
+    pomodoro.js - Pomodoro (munka/szünet ciklus időzítő)
+------------------------------------------------------------------------
+    CÉL:
+     - Pomodoro: munka/szünet ciklusú időzítő, a Time Tools kártya
+       harmadik füleként (a Stopwatch/Timer mellett), nem önálló, lebegő
+       widgetként — a timeTools.js vezérli a közös Start/Pause + Reset
+       gombokat, és hívja meg innen a toggleRunning()/resetTimer()/
+       isRunning() függvényeket, amikor épp ez az aktív eszköz
+     - Túléli a newtab újratöltését: egy ABSZOLÚT végidőbélyeget tárol
+       (nem egy futó intervallumot) — a visszaszámlálás minden
+       betöltéskor/tick-nél a valós eltelt időből kerül újraszámolásra,
+       így a fül bezárása és újranyitása nem állítja vissza és nem
+       csúsztatja el
+     - Amikor egy fázis véget ér, automatikusan lép a következőre (rövid
+       szünet -> munka -> rövid szünet -> ... -> hosszú szünet), és
+       fut tovább, hacsak nincs szüneteltetve
+======================================================================*/
 
 const STATE_KEY = 'pomodoroState';
 const TICK_MS = 250;
@@ -24,10 +32,14 @@ const PHASE_COLORS = {
     longBreak: 'hsl(200 60% 60%)'
 };
 
+//! ---------- ÁLLAPOT ----------
+
+// CÉL: Gyári alapértelmezett beállítások (percben)
 function defaultSettings() {
     return { workMin: 25, shortBreakMin: 5, longBreakMin: 15, sessionsUntilLong: 4 };
 }
 
+// CÉL: Gyári alapértelmezett állapot (munka fázissal, megállítva)
 function defaultState() {
     const settings = defaultSettings();
     return {
@@ -40,6 +52,12 @@ function defaultState() {
     };
 }
 
+/*
+    CÉL: Állapot betöltése localStorage-ból
+     - Hiányzó/hibás mentett állapot esetén az alapértelmezettre esik vissza
+     - A mentett settings-et is összefésüli az alapértelmezettel, hogy
+       egy régebbi mentésből hiányzó új mező se okozzon hibát
+*/
 function loadState() {
     try {
         const raw = localStorage.getItem(STATE_KEY);
@@ -59,10 +77,12 @@ let state = loadState();
 let tickHandle = null;
 let audioCtx = null;
 
+// CÉL: A jelenlegi állapot kimentése localStorage-ba
 function saveState() {
     localStorage.setItem(STATE_KEY, JSON.stringify(state));
 }
 
+// CÉL: Egy adott fázis teljes hossza ezredmásodpercben, a beállítások alapján
 function durationMs(phase) {
     const { settings } = state;
     if (phase === 'work') return settings.workMin * 60000;
@@ -70,6 +90,12 @@ function durationMs(phase) {
     return settings.longBreakMin * 60000;
 }
 
+/*
+    CÉL: A következő fázis meghatározása
+     - Munka fázis után: minden sessionsUntilLong-adik alkalommal hosszú
+       szünet (és a számláló nullázódik), egyébként rövid szünet
+     - Bármelyik szünet után mindig munka jön
+*/
 function nextPhase() {
     if (state.phase === 'work') {
         state.sessionsCompleted += 1;
@@ -82,12 +108,15 @@ function nextPhase() {
     return 'work';
 }
 
+/*
+    CÉL: Riasztó hangjelzés lejátszása (fázisváltáskor)
+     - Két, egymást követő "csippenés", az audio-óra (nem setTimeout)
+       alapján ütemezve, hogy a második is minta-pontosan üljön
+*/
 function playBeep() {
     try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
         const now = audioCtx.currentTime;
-        // Two beeps back to back, scheduled on the audio clock (not
-        // setTimeout) so the second one stays sample-accurate.
         [0, 0.45].forEach((offset) => {
             const start = now + offset;
             const osc = audioCtx.createOscillator();
@@ -102,13 +131,17 @@ function playBeep() {
             osc.stop(start + 0.4);
         });
     } catch {
-        // Audio isn't essential — a silent widget still works fine.
+        // A hang nem létfontosságú — a widget hang nélkül is jól működik.
     }
 }
 
-// If the phase already ended (including while the tab was closed), advance
-// once to the phase you'd be in next, rather than replaying every phase
-// that would have elapsed in between.
+//! ---------- IDŐSZÁMÍTÁS ----------
+
+/*
+    CÉL: Ha a fázis már véget ért (akár úgy is, hogy a fül közben be
+    volt zárva), egyet lép a következő fázisra — ahelyett, hogy minden
+    fázist lejátszana, ami közben ELVILEG eltelt volna
+*/
 function catchUp() {
     if (!state.isRunning || state.endsAt === null) return;
     if (Date.now() < state.endsAt) return;
@@ -119,6 +152,7 @@ function catchUp() {
     playBeep();
 }
 
+// CÉL: A hátralévő idő kiszámítása (ezredmásodpercben), futás közben az endsAt horgonyból
 function remainingMs() {
     if (state.isRunning && state.endsAt !== null) {
         return Math.max(0, state.endsAt - Date.now());
@@ -126,9 +160,12 @@ function remainingMs() {
     return state.remainingMs;
 }
 
-// Same digit/time-segment markup the Timer uses, so the two counters are
-// visually identical (tabular-nums digits, muted colon) rather than just
-// sharing a font.
+/*
+    CÉL: Idő formázása MM:SS alakra
+     - Ugyanaz a digit/time-segment markup, amit a Timer használ, hogy a
+       két számláló vizuálisan azonos legyen (egyenközű számjegyek,
+       tompított kettőspont), ne csak a betűtípusuk egyezzen
+*/
 function formatTime(ms) {
     const totalSeconds = Math.ceil(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
@@ -136,6 +173,9 @@ function formatTime(ms) {
     return `<span class="digit">${m.toString().padStart(2, '0')}</span><span class="time-segment">:</span><span class="digit">${s.toString().padStart(2, '0')}</span>`;
 }
 
+//! ---------- MEGJELENÍTÉS ----------
+
+// CÉL: A Pomodoro panel DOM elemeinek lekérése
 function getEls() {
     return {
         time: document.getElementById('pomodoro-time'),
@@ -144,6 +184,7 @@ function getEls() {
     };
 }
 
+// CÉL: A kijelzés (hátralévő idő, fázis felirat/szín, haladás-sáv) frissítése az aktuális állapot alapján
 function render() {
     const els = getEls();
     if (!els.time) return;
@@ -159,20 +200,30 @@ function render() {
     els.progressFill.style.width = `${(1 - remainingFraction) * 100}%`;
 }
 
+// CÉL: Egy "tick" — előbb esetleges fázisváltás pótlása (catchUp), majd újrarajzolás
 function tick() {
     catchUp();
     render();
 }
 
+// CÉL: Az ismétlődő tick-elés elindítása (ha még nem fut)
 function startTicking() {
     if (tickHandle) return;
     tickHandle = setInterval(tick, TICK_MS);
 }
 
+//! ---------- VEZÉRLÉS (timeTools.js hívja) ----------
+
+// CÉL: Fut-e éppen a Pomodoro
 export function isPomodoroRunning() {
     return state.isRunning;
 }
 
+/*
+    CÉL: Indítás/szüneteltetés váltása
+     - Megállításkor: a hátralévő idő kiszámítva és elmentve, endsAt törölve
+     - Indításkor: endsAt beállítva a mostantól számított hátralévő időre
+*/
 export function toggleRunning() {
     if (state.isRunning) {
         state.remainingMs = remainingMs();
@@ -186,6 +237,7 @@ export function toggleRunning() {
     render();
 }
 
+// CÉL: Teljes nullázás — vissza az első munka-fázisra, megállítva
 export function resetTimer() {
     state.phase = 'work';
     state.sessionsCompleted = 0;
@@ -197,10 +249,14 @@ export function resetTimer() {
 }
 
 // ---------------------------------------------------------------------
-// Settings popover (same chrome as shortcuts.js's edit popover)
+// Beállítások popover (ugyanaz a "chrome", mint a shortcuts.js szerkesztő popoverje)
 // ---------------------------------------------------------------------
 let settingsPopoverEl = null;
 
+/*
+    CÉL: A beállítások popover létrehozása (csak első hívásra), vagy a
+    már meglévő visszaadása
+*/
 function getSettingsPopover() {
     if (settingsPopoverEl) return settingsPopoverEl;
 
@@ -232,10 +288,12 @@ function getSettingsPopover() {
     return settingsPopoverEl;
 }
 
+// CÉL: A beállítások popover bezárása
 function closeSettingsPopover() {
     if (settingsPopoverEl) settingsPopoverEl.classList.remove('open');
 }
 
+// CÉL: A popover pozicionálása a kattintás helyéhez, képernyőszélen túllógás elkerülésével
 function positionPopover(popover, clickEvent) {
     const margin = 12;
     popover.style.left = `${clickEvent.clientX}px`;
@@ -249,13 +307,14 @@ function positionPopover(popover, clickEvent) {
         const overflowRight = rect.right - (window.innerWidth - margin);
         if (overflowRight > 0) left -= overflowRight;
         const overflowBottom = rect.bottom - (window.innerHeight - margin);
-        if (overflowBottom > 0) top -= rect.height + 24; // flip above the cursor
+        if (overflowBottom > 0) top -= rect.height + 24; // felfelé "átbillentve" a kurzor fölé
 
         popover.style.left = `${Math.max(margin, left)}px`;
         popover.style.top = `${Math.max(margin, top)}px`;
     });
 }
 
+// CÉL: A popover mezőinek feltöltése a megadott beállításokkal
 function fillSettingsForm(settings) {
     const popover = getSettingsPopover();
     popover.querySelector('.pomodoro-input-work').value = settings.workMin;
@@ -264,6 +323,7 @@ function fillSettingsForm(settings) {
     popover.querySelector('.pomodoro-input-sessions').value = settings.sessionsUntilLong;
 }
 
+// CÉL: A beállítások popover megnyitása, a jelenlegi állapot értékeivel feltöltve
 function openSettingsPopover(clickEvent) {
     const popover = getSettingsPopover();
     fillSettingsForm(state.settings);
@@ -272,8 +332,17 @@ function openSettingsPopover(clickEvent) {
     popover.querySelector('.pomodoro-input-work').focus();
 }
 
-// Shared by the settings popover's Save button and the Import All flow —
-// both just need "here are new settings, validate and apply them".
+/*
+    CÉL: Új beállítások validálása és alkalmazása
+     - Közös a beállítások popover Save gombja és az Import All folyamat
+       számára — mindkettőnek csak annyi kell: "itt az új settings,
+       validáld és alkalmazd"
+    BE: settings - { workMin, shortBreakMin, longBreakMin, sessionsUntilLong }
+    KI: true, ha sikerült alkalmazni; false, ha érvénytelen volt
+    MEGJEGYZÉS:
+     - Beállítás-váltáskor a FOLYAMATBAN lévő fázis frissen újraindul,
+       nem próbálja megtartani az eltelt idő arányát törtrészként
+*/
 function applySettings(settings) {
     const { workMin, shortBreakMin, longBreakMin, sessionsUntilLong } = settings;
     if ([workMin, shortBreakMin, longBreakMin, sessionsUntilLong].some((n) => !Number.isFinite(n) || n < 1)) {
@@ -281,8 +350,6 @@ function applySettings(settings) {
     }
 
     state.settings = { workMin, shortBreakMin, longBreakMin, sessionsUntilLong };
-    // Changing settings mid-countdown restarts the current phase fresh
-    // rather than trying to preserve a fractional elapsed proportion.
     state.remainingMs = durationMs(state.phase);
     if (state.isRunning) state.endsAt = Date.now() + state.remainingMs;
     saveState();
@@ -290,6 +357,7 @@ function applySettings(settings) {
     return true;
 }
 
+// CÉL: A popover mezőiből beállítások összeállítása, validálása és mentése
 function saveSettings() {
     const popover = getSettingsPopover();
     const settings = {
@@ -306,23 +374,33 @@ function saveSettings() {
     closeSettingsPopover();
 }
 
-// Used by Export All / Import All in main.js, so Pomodoro's focus/break
-// lengths travel with the rest of the settings instead of being silently
-// left behind on the old browser/profile.
+/*
+    CÉL: A jelenlegi Pomodoro-beállítások lekérése (másolatként)
+     - Az Export All / Import All (main.js) használja, hogy a Pomodoro
+       fókusz/szünet hosszai is átkerüljenek a többi beállítással együtt,
+       ne maradjanak csendben a régi böngészőn/profilon
+*/
 export function getPomodoroSettings() {
     return { ...state.settings };
 }
 
+// CÉL: Beállítások alkalmazása kívülről (Import All), hiányzó mezők pótlása az alapértelmezettel
 export function setPomodoroSettings(settings) {
     applySettings({ ...defaultSettings(), ...settings });
 }
 
+// Popover bezárása kívülre kattintásra
 document.addEventListener('click', (e) => {
     if (settingsPopoverEl && settingsPopoverEl.classList.contains('open') && !settingsPopoverEl.contains(e.target)) {
         closeSettingsPopover();
     }
 });
 
+/*
+    CÉL: A Pomodoro panel bekötése (a Time Tools inicializálásakor hívva)
+     - Pótolja az esetleg elmaradt fázisváltást, kirajzol, elindítja a tick-elést
+     - Bekötia a beállítások (fogaskerék) gombot
+*/
 export function initPomodoroPanel() {
     const els = getEls();
     if (!els.time) return;

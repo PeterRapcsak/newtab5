@@ -1,12 +1,37 @@
+/*======================================================================
+    themeCustomizer.js - Téma testreszabó panel
+------------------------------------------------------------------------
+    CÉL:
+     - A fogaskerék-ikon mögötti panel felépítése: színtéma-választó
+       (33 beépített téma, család/tónus szerint csoportosítva),
+       "Low Detail Mode" kapcsoló, és a "Refresh Icons" gomb
+     - A kiválasztott téma/beállítások localStorage-ba mentése és
+       induláskor való visszatöltése
+    MEGJEGYZÉS:
+     - A panel HTML-je itt, JS-ből, innerHTML-lel épül fel (nem
+       index.html-ben van), ezért NEM szabad a sablon-stringen belül
+       semmilyen JS-stílusú kommentet elhelyezni — az szó szerint
+       megjelenő szövegként kerülne a lapra. Ahol mégis komment kell a
+       markupon belül, ott valódi HTML kommentet használunk.
+======================================================================*/
+
 import { refreshAllIcons } from './iconRefresh.js';
 import { renderShortcuts } from './shortcuts.js';
 import { renderBottomBar } from './bottomBar.js';
 
+/*
+    CÉL: A téma testreszabó panel (gombbal együtt) felépítése és bekötése
+     - Panel HTML felépítése (beállítások oszlop + színválasztó oszlop)
+     - Mentett téma / Low Detail Mode visszatöltése
+     - Refresh Icons, panel nyitás/zárás, témaválasztás eseménykezelői
+*/
 export function initializeThemeCustomizer() {
     const pageControls = document.getElementById('page-controls');
     if (!pageControls) return;
 
-    // Create theme customizer panel with organized sections
+    //! ---------- PANEL FELÉPÍTÉSE (HTML sablon) ----------
+
+    // Téma testreszabó panel létrehozása, rendezett szekciókkal
     const customizerPanel = document.createElement('div');
     customizerPanel.className = 'theme-customizer';
     customizerPanel.innerHTML = `
@@ -32,10 +57,11 @@ export function initializeThemeCustomizer() {
             <div class="theme-customizer-col theme-colors-col">
                 <h3>Color Theme</h3>
 
-                <!-- One family per hue, one tier per depth/character — pick a
-                     family, then how dark/light/vivid you want it. Grouping by
-                     family (instead of mixing Blue+Grey together by depth) is
-                     what actually makes 33 options easy to scan. -->
+                <!-- Egy család hue-nként, egy tier mélységenként/jellegenként —
+                     válassz egy családot, aztán hogy milyen sötét/világos/
+                     élénk legyen. A családonkénti csoportosítás (nem pedig a
+                     Kék+Szürke összekeverése mélység szerint) teszi
+                     valójában könnyen áttekinthetővé a 33 lehetőséget. -->
                 <div class="theme-section">
                     <h4>Blue</h4>
                     <div class="theme-tier">
@@ -126,29 +152,31 @@ export function initializeThemeCustomizer() {
         </div>
     `;
 
-    // Create gear icon button
+    // Fogaskerék ikongomb létrehozása
     const gearButton = document.createElement('button');
     gearButton.className = 'theme-toggle-btn';
     gearButton.innerHTML = '<i class="fas fa-cog"></i>';
     gearButton.title = 'Customize Theme';
 
-    // Create wrapper for positioning
+    // Wrapper létrehozása a pozicionáláshoz
     const themeWrapper = document.createElement('div');
     themeWrapper.className = 'theme-wrapper';
     themeWrapper.appendChild(customizerPanel);
     themeWrapper.appendChild(gearButton);
 
-    // Lives in the fixed bottom-right control cluster, next to the edit button
+    // A fix, jobb alsó gombcsoportban él, az Edit gomb mellett
     pageControls.appendChild(themeWrapper);
 
-    // Get theme options after they're added to DOM
+    // A téma-opciókat csak azután kérdezzük le, hogy bekerültek a DOM-ba
     const themeOptions = customizerPanel.querySelectorAll('.theme-option');
 
-    // Load saved theme
+    //! ---------- MENTETT ÁLLAPOT VISSZATÖLTÉSE ----------
+
+    // Mentett téma betöltése
     const savedTheme = localStorage.getItem('selectedTheme') || 'grey';
     applyTheme(savedTheme);
 
-    // Load and apply Low Detail Mode setting
+    // Mentett Low Detail Mode beállítás betöltése és alkalmazása
     const lowDetailToggle = customizerPanel.querySelector('#low-detail-toggle');
     const savedLowDetail = localStorage.getItem('lowDetailMode') === 'true';
     lowDetailToggle.checked = savedLowDetail;
@@ -160,7 +188,9 @@ export function initializeThemeCustomizer() {
         applyLowDetailMode(isEnabled);
     });
 
-    // Refresh Icons: fetch each shortcut/tool's real favicon and cache it
+    //! ---------- REFRESH ICONS ----------
+
+    // Refresh Icons: minden shortcut/tool valódi favicon-jának lekérése és cache-elése
     const refreshIconsBtn = customizerPanel.querySelector('#refresh-icons-btn');
     const refreshIconsStatus = customizerPanel.querySelector('#refresh-icons-status');
     const refreshIconsDefaultStatus = refreshIconsStatus.textContent;
@@ -193,40 +223,46 @@ export function initializeThemeCustomizer() {
         });
     });
 
+    // CÉL: A Low Detail Mode tényleges alkalmazása (CSS osztály ki/be)
     function applyLowDetailMode(enabled) {
         document.documentElement.classList.toggle('low-detail', enabled);
     }
 
-    // Toggle panel visibility
+    //! ---------- PANEL NYITÁS/ZÁRÁS ----------
+
+    // Panel láthatóság kapcsolása
     gearButton.addEventListener('click', (e) => {
         e.stopPropagation();
         customizerPanel.classList.toggle('active');
     });
 
-    // Close panel when clicking outside
+    // Panel bezárása kívülre kattintásra
     document.addEventListener('click', (e) => {
         if (!customizerPanel.contains(e.target) && e.target !== gearButton) {
             customizerPanel.classList.remove('active');
         }
     });
 
-    // Theme selection
+    //! ---------- TÉMAVÁLASZTÁS ----------
+
+    // Témaválasztás
     themeOptions.forEach(option => {
         option.addEventListener('click', () => {
             const theme = option.dataset.theme;
             applyTheme(theme);
             localStorage.setItem('selectedTheme', theme);
-            
-            // Update active state
+
+            // Aktív állapot frissítése
             themeOptions.forEach(opt => opt.classList.remove('active'));
             option.classList.add('active');
         });
     });
 
+    // CÉL: A kiválasztott téma tényleges alkalmazása (data-theme attribútummal)
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        
-        // Update active option
+
+        // Aktív opció frissítése
         themeOptions.forEach(opt => {
             opt.classList.toggle('active', opt.dataset.theme === theme);
         });

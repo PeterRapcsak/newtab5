@@ -1,3 +1,17 @@
+/*======================================================================
+    qrcode-generator.js - Külső (vendored) könyvtár - VÁLTOZATLAN
+------------------------------------------------------------------------
+    MEGJEGYZÉS:
+     - Ez NEM a projekt saját kódja, hanem egy MIT licencű, harmadik
+       féltől származó, becsomagolt (vendored) könyvtár (lásd lent az
+       eredeti fejlécet) — qrWidget.js importálja, ez adja a tényleges
+       QR-kód generálást
+     - Szándékosan NEM lett újrakommentelve/átformázva a projekt többi
+       részének stílusában: sűrű, algoritmikus (Reed-Solomon hibajavítás
+       stb.) kód, ahol egy félreértett rész könnyen hibát okozna, a
+       licenc pedig saját eredeti formájában tartandó
+======================================================================*/
+
 //---------------------------------------------------------------------
 //
 // QR Code Generator for JavaScript

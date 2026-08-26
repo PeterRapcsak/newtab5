@@ -1,3 +1,30 @@
+/*======================================================================
+    main.js - Belépési pont
+------------------------------------------------------------------------
+    CÉL:
+     - Az összes modul (scripts/*.js) inicializálása, DOMContentLoaded-re
+     - A dinamikusan, JS-ből létrehozott, közös vezérlők felépítése: az
+       Import/Export gombok és az egyetlen, közös Edit gomb
+     - "Export All" / "Import All": a teljes beállításhalmaz (shortcut-ok,
+       bottom bar, téma, keresőmotor, valuták, Pomodoro) egyetlen .json
+       fájlba mentése, illetve visszatöltése
+    PLATFORM:
+     - Böngésző-kiegészítő (Manifest V3), helyenként chrome.* API-kat
+       használ (lásd search.js, iconRefresh.js) -> elsősorban Chrome/
+       Chromium-alapú böngészőkben fut; Firefoxhoz lásd manifest(firefox).json
+    SZERZŐI JEGYZET (a teljes scripts/ mappára érvényes elnevezési/
+    kommentelési konvenció):
+     - Minden függvénynek camelCase elnevezése van
+     - A függvények fejléce fölötti értelmező:
+        CÉL         = Mi a célja a függvénynek
+        BE          = Bemenet (paraméterek)
+        KI          = Kimenet (visszatérési érték)
+        MEGJEGYZÉS  = egyéb, nem magától értetődő tudnivaló
+     - SZEKCIÓK:   //! ---------- cím ----------
+       (fájlon belüli nagyobb, logikai blokkok elválasztására)
+     - //? egy-egy alpont/megjegyzés kiemelésére, a //!-nál kisebb súllyal
+======================================================================*/
+
 import { domElements } from './dom.js';
 import { initializeTimeTools } from './timeTools.js';
 import { getPomodoroSettings, setPomodoroSettings } from './pomodoro.js';
@@ -9,6 +36,13 @@ import { initializeThemeCustomizer } from './themeCustomizer.js';
 import { initializeQuickTools } from './quickTools.js';
 import { initQrWidget } from './qrWidget.js';
 
+/*
+    CÉL: Az oldal felépítése induláskor (DOMContentLoaded-re hívva)
+     - Minden modul saját inicializáló függvényének meghívása
+     - A shortcut-hozzáadás gomb/mezők bekötése
+     - Az Import/Export gombok és a közös Edit gomb dinamikus felépítése
+       és a fix, jobb alsó gombcsoportba (#page-controls) illesztése
+*/
 function init() {
     setupSearch();
     loadShortcuts();
@@ -27,21 +61,23 @@ function init() {
     } else {
         console.error('Add shortcut button not found');
     }
-    
+
     if (domElements.shortcuts.newName) {
         domElements.shortcuts.newName.addEventListener('keypress', handleAddShortcutKeyPress);
     }
     if (domElements.shortcuts.newUrl) {
         domElements.shortcuts.newUrl.addEventListener('keypress', handleAddShortcutKeyPress);
     }
-    
+
     const pageControls = document.getElementById('page-controls');
 
-    // Import/Export live as circular glass icon buttons in the fixed
-    // bottom-right control cluster, alongside Edit and the theme gear,
-    // instead of a plain text button pair up in the shortcuts column.
-    // They stay hidden until edit mode is on — toggleEditMode() in
-    // shortcuts.js flips their visibility.
+    //! ---------- IMPORT / EXPORT GOMBOK ----------
+
+    // Az Import/Export kör alakú, üveghatásos ikongombként él a fix,
+    // jobb alsó gombcsoportban, az Edit és a téma-fogaskerék mellett,
+    // nem egy sima szöveges gombpár a shortcut-oszlop tetején. Rejtve
+    // maradnak, amíg szerkesztő mód nincs bekapcsolva — a
+    // shortcuts.js-beli toggleEditMode() állítja a láthatóságukat.
     domElements.buttons.import = document.createElement('button');
     domElements.buttons.import.id = 'import-btn';
     domElements.buttons.import.classList.add('icon-btn');
@@ -63,9 +99,11 @@ function init() {
         pageControls.appendChild(domElements.buttons.export);
     }
 
-    // One central Edit button, in the bottom-right control cluster, drives
-    // both shortcuts edit mode and bottom-bar edit mode together — no more
-    // separate "Edit" buttons that can drift out of sync with each other.
+    //! ---------- KÖZÖS EDIT GOMB ----------
+
+    // Egyetlen, közös Edit gomb, a jobb alsó gombcsoportban, ami EGYSZERRE
+    // vezérli a shortcut-ok és a bottom bar szerkesztő módját — nincs
+    // többé két külön "Edit" gomb, amik egymástól függetlenül csúszhatnának szét.
     domElements.buttons.edit = document.createElement('button');
     domElements.buttons.edit.id = 'edit-btn';
     domElements.buttons.edit.textContent = 'Edit';
@@ -77,9 +115,16 @@ function init() {
     if (pageControls) pageControls.appendChild(domElements.buttons.edit);
 }
 
+//! ---------- BEÁLLÍTÁSOK EXPORTÁLÁSA / IMPORTÁLÁSA ----------
+
+/*
+    CÉL: A teljes beállításhalmaz összegyűjtése, és letöltése egy .json fájlba
+     - Shortcut-ok, bottom bar, téma, low detail mode, keresőmotor,
+       valuták, Pomodoro beállítások — mind egy objektumban
+*/
 function exportAllSettings() {
     const allSettings = {
-        shortcuts: getShortcutsConfig(), // Now exports the full container structure
+        shortcuts: getShortcutsConfig(), // Most már a teljes konténer-struktúrát exportálja
         bottomBar: JSON.parse(localStorage.getItem('bottomBarConfig') || '{"langTools":[],"aiTools":[]}'),
         theme: localStorage.getItem('selectedTheme') || 'purple',
         lowDetailMode: localStorage.getItem('lowDetailMode') === 'true',
@@ -90,7 +135,7 @@ function exportAllSettings() {
         },
         pomodoro: getPomodoroSettings()
     };
-    
+
     const blob = new Blob([JSON.stringify(allSettings, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -100,6 +145,14 @@ function exportAllSettings() {
     URL.revokeObjectURL(url);
 }
 
+/*
+    CÉL: Korábban exportált .json fájl beolvasása, és minden benne lévő
+    beállítás alkalmazása
+    LOGIKA:
+     - Minden mezőt KÜLÖN, egymástól függetlenül ellenőriz és alkalmaz -
+       egy részlegesen kitöltött fájl (pld. csak shortcuts) sem probléma
+     - A végén újratölti az oldalt, hogy minden modul a friss állapotot lássa
+*/
 function importAllSettings() {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
@@ -111,31 +164,31 @@ function importAllSettings() {
             reader.onload = (e) => {
                 try {
                     const importedData = JSON.parse(e.target.result);
-                    
-                    // Import shortcuts (supports both old and new format)
+
+                    // Shortcut-ok importálása (mind a régi, mind az új formátumot támogatja)
                     if (importedData.shortcuts) {
                         setShortcutsConfig(importedData.shortcuts);
                     }
-                    
-                    // Import bottom bar
+
+                    // Bottom bar importálása
                     if (importedData.bottomBar) {
                         localStorage.setItem('bottomBarConfig', JSON.stringify(importedData.bottomBar));
                         loadBottomBarConfig();
                     }
-                    
-                    // Import theme
+
+                    // Téma importálása
                     if (importedData.theme) {
                         localStorage.setItem('selectedTheme', importedData.theme);
                         document.documentElement.setAttribute('data-theme', importedData.theme);
                     }
-                    
-                    // Import low detail mode
+
+                    // Low Detail Mode importálása
                     if (importedData.lowDetailMode !== undefined) {
                         localStorage.setItem('lowDetailMode', importedData.lowDetailMode);
                         document.documentElement.classList.toggle('low-detail', importedData.lowDetailMode);
                     }
-                    
-                    // Import search engine
+
+                    // Keresőmotor importálása
                     if (importedData.searchEngine) {
                         localStorage.setItem('selectedSearchEngine', importedData.searchEngine);
                         const searchSelect = document.getElementById('search-engine-select');
@@ -143,8 +196,8 @@ function importAllSettings() {
                             searchSelect.value = importedData.searchEngine;
                         }
                     }
-                    
-                    // Import currencies
+
+                    // Valuták importálása
                     if (importedData.currencies) {
                         if (importedData.currencies.from) {
                             localStorage.setItem('fromCurrency', importedData.currencies.from);
@@ -155,7 +208,7 @@ function importAllSettings() {
                         loadCurrencies();
                     }
 
-                    // Import Pomodoro focus/break lengths
+                    // Pomodoro fókusz/szünet hosszak importálása
                     if (importedData.pomodoro) {
                         setPomodoroSettings(importedData.pomodoro);
                     }

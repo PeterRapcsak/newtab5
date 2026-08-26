@@ -1,16 +1,29 @@
-// Shared icon resolution for shortcuts and bottom-bar tools.
-//
-// Public favicon aggregators (DuckDuckGo, etc.) only know about sites they've
-// crawled — for self-hosted/internal apps (Portainer, the *arr suite,
-// Immich, cPanel, ...) they don't error, they silently return a generic
-// placeholder, so a plain <img onerror> swap never even fires. To fix that
-// we try the site's own favicon.ico first (the browser can reach internal
-// hosts a public crawler never could), fall back to a favicon aggregator,
-// and finally fall back to a generated letter-avatar that always succeeds
-// and always looks intentional instead of broken.
+/*======================================================================
+    icons.js - Shortcut- és bottom bar-ikonok feloldása
+------------------------------------------------------------------------
+    CÉL:
+     - Egy adott URL-hez és névhez a lehető "legvalódibb" ikon
+       megkeresése, cache-elése és egy <img> elemre való rákötése
+    HÁTTÉR:
+     - A nyilvános favicon-aggregátorok (pld. a DuckDuckGo-é) csak azokat
+       az oldalakat ismerik, amiket már bejártak — a self-hosted/belső
+       hálózati alkalmazásoknál (Portainer, az *arr csomag, Immich,
+       cPanel, stb.) nem hibáznak, csak csendben egy általános
+       placeholder ikont adnak vissza, így egy sima <img onerror> csere
+       el sem sülne
+     - Ennek kiküszöbölésére: először magának az oldalnak a saját
+       favicon.ico-ját próbáljuk (a böngésző el tud érni olyan belső
+       hostokat is, amikhez egy nyilvános crawler soha), utána jön egy
+       favicon-aggregátor, végül pedig egy generált betűs avatar, ami
+       mindig sikerül, és mindig szándékosnak, nem hibásnak tűnik
+======================================================================*/
+
+//! ---------- KONSTANSOK / ADATOK ----------
 
 const BASE_ICON_URL = "https://www.gstatic.com/images/branding/product/1x/";
 
+// Google szolgáltatásokhoz kézzel válogatott, "hivatalos" ikonok
+// (a saját favicon.ico-juk gyakran nem a márka logóját mutatja)
 const GOOGLE_SERVICE_ICONS = {
     "analytics.google.com": "analytics_48dp.png",
     "books.google.com": "books_48dp.png",
@@ -39,6 +52,8 @@ const GOOGLE_SERVICE_ICONS = {
     "studio.youtube.com": "youtube_studio_48dp.png",
 };
 
+// Kézzel megadott, speciális ikon URL-ek olyan oldalakhoz, ahol a
+// favicon.ico / aggregátor lánc nem adna jó eredményt
 const SPECIAL_ICONS = {
     "chat.deepseek.com": "https://chat.deepseek.com/favicon.ico",
     "deepseek.com": "https://chat.deepseek.com/favicon.ico",
@@ -48,8 +63,9 @@ const SPECIAL_ICONS = {
     "aistudio.google.com": "https://www.gstatic.com/aistudio/ai_studio_favicon_32x32.png",
 };
 
-// Soft, evenly-spread palette (same S/L formula as the theme presets) so
-// generated avatars feel native to the rest of the UI regardless of theme.
+// Lágy, egyenletesen elosztott színpaletta (ugyanaz az S/L képlet, mint a
+// téma-előbeállításoknál), hogy a generált avatarok illeszkedjenek a UI
+// többi részéhez, a témától függetlenül
 const AVATAR_PALETTE = [
     'hsl(224 55% 60%)', 'hsl(252 52% 62%)', 'hsl(280 48% 60%)', 'hsl(320 50% 60%)',
     'hsl(340 55% 60%)', 'hsl(8 58% 60%)', 'hsl(28 60% 55%)', 'hsl(45 55% 48%)',
@@ -57,8 +73,14 @@ const AVATAR_PALETTE = [
     'hsl(213 55% 55%)', 'hsl(262 40% 55%)',
 ];
 
-const ICON_CACHE_KEY = 'iconCacheV1';
+const ICON_CACHE_KEY = 'iconCacheV1'; // localStorage kulcs a cache-elt ikonokhoz
 
+//! ---------- SEGÉDFÜGGVÉNYEK ----------
+
+/*
+    CÉL: URL string biztonságos feldolgozása URL objektummá
+    KI: az URL objektum, vagy null, ha érvénytelen a string
+*/
 function parseUrl(url) {
     try {
         return new URL(url);
@@ -67,6 +89,10 @@ function parseUrl(url) {
     }
 }
 
+/*
+    CÉL: Az ikon-cache beolvasása a localStorage-ból
+    KI: { url: dataUri, ... } alakú objektum (üres objektum, ha nincs/hibás)
+*/
 function loadIconCache() {
     try {
         return JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
@@ -75,12 +101,19 @@ function loadIconCache() {
     }
 }
 
-// Permanent, locally-cached "real" icon for a URL, set by the Refresh Icons
-// flow (see iconRefresh.js). Checked before any network attempt.
+//! ---------- CACHE (a Refresh Icons tölti fel, lásd iconRefresh.js) ----------
+
+/*
+    CÉL: Egy URL-hez tartozó, véglegesen cache-elt "valódi" ikon lekérése
+     - A Refresh Icons folyamat tölti fel (lásd iconRefresh.js)
+     - Minden hálózati próbálkozás ELŐTT ezt ellenőrizzük
+    KI: data URI string, vagy null, ha nincs cache-elve
+*/
 export function getCachedIconUrl(url) {
     return loadIconCache()[url] || null;
 }
 
+// CÉL: Egy URL-hez tartozó ikon elmentése a cache-be
 export function setCachedIconUrl(url, dataUri) {
     const cache = loadIconCache();
     cache[url] = dataUri;
@@ -91,10 +124,18 @@ export function setCachedIconUrl(url, dataUri) {
     }
 }
 
+// CÉL: A teljes ikon-cache törlése
 export function clearIconCache() {
     localStorage.removeItem(ICON_CACHE_KEY);
 }
 
+//! ---------- BETŰS AVATAR GENERÁLÁSA ----------
+
+/*
+    CÉL: Egyszerű hash-függvény: string -> egész szám
+     - Ebből választjuk ki a betűs avatar színét, hogy mindig ugyanaz a
+       szín tartozzon ugyanahhoz a névhez
+*/
 function hashString(str) {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -103,16 +144,23 @@ function hashString(str) {
     return hash;
 }
 
+// CÉL: XML-ben (itt: SVG-ben) veszélyes karakterek escape-elése
 function escapeXml(str) {
     return str.replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
     }[c]));
 }
 
-// First choice: a curated icon for known services, otherwise the site's own
-// favicon.ico — fetched via the shortcut's own protocol/host/port so
-// internal-network apps (http://192.168.x.x:8096, custom ports, etc.)
-// resolve correctly.
+//! ---------- IKON-FALLBACK LÁNC ----------
+
+/*
+    CÉL: Első próbálkozás -> kurált ikon ismert szolgáltatáshoz, egyébként
+    az oldal saját favicon.ico-ja
+     - A shortcut saját protokollján/hostján/portján keresztül kérjük le,
+       így a belső hálózati appok (http://192.168.x.x:8096, egyedi
+       portok, stb.) is helyesen feloldódnak
+    KI: ikon URL string, vagy null, ha az input URL érvénytelen
+*/
 export function getPrimaryIconUrl(url) {
     const parsed = parseUrl(url);
     if (!parsed) return null;
@@ -121,16 +169,21 @@ export function getPrimaryIconUrl(url) {
     return `${parsed.origin}/favicon.ico`;
 }
 
-// Second choice: a public favicon aggregator, for sites that are reachable
-// on the open web but didn't have a favicon.ico at the root.
+/*
+    CÉL: Második próbálkozás -> nyilvános favicon-aggregátor, azoknak az
+    oldalaknak, amik elérhetők a nyílt weben, de nem volt favicon.ico-juk
+    a gyökérben
+*/
 export function getSecondaryIconUrl(url) {
     const parsed = parseUrl(url);
     return parsed ? `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(parsed.hostname)}` : null;
 }
 
-// Last resort: a generated initial-letter avatar. Always succeeds (it's a
-// local data URI, no network involved) and always looks like a real icon
-// rather than a broken image.
+/*
+    CÉL: Utolsó lehetőség -> generált kezdőbetűs avatar
+     - Mindig sikerül (helyi data URI, nincs hozzá hálózat)
+     - Mindig szándékos ikonnak néz ki, nem törött képnek
+*/
 export function getLetterAvatarUrl(label) {
     const text = (label || '').trim();
     const letter = escapeXml((Array.from(text)[0] || '?').toUpperCase());
@@ -143,12 +196,20 @@ export function getLetterAvatarUrl(label) {
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
-// Wires up an <img> with the full fallback cascade: real favicon -> favicon
-// aggregator -> generated letter-avatar. Call once per image right after
-// creating it.
+/*
+    CÉL: Egy <img> elem felkötése a teljes fallback láncra:
+    valódi favicon -> favicon-aggregátor -> generált betűs avatar
+    BE:
+     - imgElement: a kép DOM elem
+     - url: a shortcut/tool URL-je (ebből próbáljuk kitalálni az ikont)
+     - label: a megjelenített név (ebből lesz a fallback avatar betűje)
+    MEGJEGYZÉS:
+     - Elemenként egyszer kell meghívni, közvetlenül a létrehozása után
+*/
 export function applyIcon(imgElement, url, label) {
     const cached = getCachedIconUrl(url);
     if (cached) {
+        // Van végleges cache -> nincs szükség a fallback láncra
         imgElement.onerror = null;
         imgElement.src = cached;
         return;
@@ -158,6 +219,7 @@ export function applyIcon(imgElement, url, label) {
     const avatar = getLetterAvatarUrl(label);
 
     if (!primary) {
+        // Érvénytelen URL -> egyenesen az avatar
         imgElement.onerror = null;
         imgElement.src = avatar;
         return;
@@ -166,8 +228,10 @@ export function applyIcon(imgElement, url, label) {
     const secondary = getSecondaryIconUrl(url);
     imgElement.src = primary;
     imgElement.onerror = () => {
+        // Az elsődleges (favicon.ico) nem töltött be -> jöhet a lánc második eleme
         if (secondary) {
             imgElement.onerror = () => {
+                // A másodikra (aggregátor) is hiba -> végső fallback: avatar
                 imgElement.onerror = null;
                 imgElement.src = avatar;
             };

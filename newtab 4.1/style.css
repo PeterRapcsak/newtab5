@@ -1,3 +1,25 @@
+/*======================================================================
+    style.css - Stílusok
+------------------------------------------------------------------------
+    CÉL:
+     - Design tokenek (CSS custom property-k): térköz, tipográfia,
+       lekerekítés, árnyék, szín
+     - 33 választható színtéma (család + mélységi szint szerint
+       csoportosítva), mind a --accent-primary-ból levezetett glass/
+       glow/wash effektekkel, automatikusan színezve
+     - Az összes komponens (gomb-rendszer, form mezők, keresősáv,
+       shortcut-ok, alsó eszköztár, popoverek, QR-widget, Pomodoro,
+       stb.) stílusai
+     - Reszponzív töréspontok, és Low Detail Mode (teljesítmény-mód a
+       blur/mozgás/gradiens effektek kikapcsolására)
+    SZERKEZET:
+     - Nagyobb, fájlon belüli szekció-fejlécek: "====" kerettel
+     - Kisebb, komponensen belüli alszekciók: "----" kerettel
+     - A CSS nem támogatja a JS-stílusú sortörő kommentet (nincs "//"),
+       ezért ez a fájl mindenhol a szabványos CSS blokk-kommentet
+       használja a szekció-fejlécekhez is
+======================================================================*/
+
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
 
@@ -8,23 +30,23 @@
 }
 
 /* ==================================================================
-   DESIGN TOKENS
+   TERVEZÉSI TOKENEK (DESIGN TOKENS)
 
-   Spacing rhythm (use these everywhere, no hand-rolled px gaps):
-     2xs 4px  – icon/label micro-gaps, dense pill padding
-     xs  8px  – tight clusters, compact bars
-     sm  12px – stacking gaps within a column, compact card padding
-     md  16px – standard card padding, grid gaps, column gaps
-     lg  24px – spacious card padding
-     xl  32px – large/hero spacing
+   Térköz-ritmus (ezeket használjuk mindenhol, ne legyen kézzel írt px):
+     2xs 4px  – ikon/felirat mikro-rések, sűrű pill padding
+     xs  8px  – szoros csoportosítások, kompakt sávok
+     sm  12px – egy oszlopon belüli halmozási rés, kompakt kártya padding
+     md  16px – szabvány kártya padding, rács-rések, oszlop-rések
+     lg  24px – tágas kártya padding
+     xl  32px – nagy/hero térköz
 
-   Type scale: flattened to a single 14px size everywhere (--shortcut-font,
-   used only by shortcut names, is the one exception).
+   Betűméret-skála: mindenhol egyetlen 14px-es méretre lapítva
+   (--shortcut-font, amit csak a shortcut-nevek használnak, a kivétel).
    ================================================================== */
 :root {
     color-scheme: dark;
 
-    /* Typography */
+    /* Tipográfia */
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
 
@@ -39,7 +61,7 @@
     --fw-medium: 500;
     --fw-semibold: 600;
 
-    /* Spacing */
+    /* Térköz */
     --spacing-2xs: 4px;
     --spacing-xs: 8px;
     --spacing-sm: 12px;
@@ -47,21 +69,21 @@
     --spacing-lg: 24px;
     --spacing-xl: 32px;
 
-    /* Radii */
+    /* Lekerekítések */
     --border-radius: 16px;
     --border-radius-sm: 12px;
     --border-radius-lg: 24px;
 
-    /* Motion */
+    /* Mozgás/átmenet */
     --transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-fast: all 110ms ease;
 
-    /* Elevation — soft, restrained, neutral */
+    /* Emelkedés (árnyék) — lágy, visszafogott, semleges */
     --shadow-sm: 0 2px 6px -2px rgba(8, 9, 16, 0.35);
     --shadow-md: 0 10px 24px -10px rgba(8, 9, 16, 0.45);
     --shadow-lg: 0 22px 48px -18px rgba(8, 9, 16, 0.5);
 
-    /* Base palette — soft neutral slate (the default look) */
+    /* Alap paletta — lágy, semleges "slate" (az alapértelmezett kinézet) */
     --bg-primary: hsl(226 20% 9%);
     --bg-secondary: hsl(226 19% 13%);
     --bg-tertiary: hsl(226 17% 18%);
@@ -74,37 +96,38 @@
     --text-secondary: hsl(233 30% 80%);
     --text-tertiary: hsl(233 18% 62%);
 
-    /* Derived translucent surfaces — recompute per active theme automatically */
+    /* Levezetett, áttetsző felületek — automatikusan újraszámolva minden aktív témánál */
     --glass-bg: color-mix(in srgb, var(--accent-primary) 6%, transparent);
     --glass-border: color-mix(in srgb, var(--accent-primary) 14%, transparent);
     --glass-shadow: var(--shadow-md);
     --accent-glow: color-mix(in srgb, var(--accent-primary) 24%, transparent);
     --accent-wash: color-mix(in srgb, var(--accent-primary) 10%, transparent);
 
-    /* Soft coral danger accent (shared across all themes) */
+    /* Lágy korall "veszély" szín (minden témában közös) */
     --danger: hsl(5 58% 65%);
     --danger-strong: hsl(3 50% 54%);
     --danger-gradient: linear-gradient(135deg, hsl(5 58% 65%) 0%, hsl(3 50% 54%) 100%);
     --danger-glow: color-mix(in srgb, var(--danger) 30%, transparent);
 
-    /* Bottom bar row height — shared by .section-items and the Edit button
-       so they always line up exactly */
+    /* Az alsó eszköztár sorának magassága — közös a .section-items és az
+       Edit gomb között, hogy mindig pontosan egy vonalban legyenek */
     --bottom-bar-row: 60px;
 
-    /* Shortcut sizing (responsive) */
+    /* Shortcut méretezés (reszponzív) */
     --shortcut-size: 50px;
     --shortcut-font: 0.8rem;
 }
 
 /* ==================================================================
-   THEME PRESETS
-   Each preset only redefines hue-bearing tokens (backgrounds, accent,
-   secondary/tertiary text). Glass surfaces, glows and washes above
-   are derived from --accent-primary via color-mix, so every theme
-   stays correctly tinted without repeating itself.
+   TÉMA-ELŐBEÁLLÍTÁSOK (THEME PRESETS)
+   Minden előbeállítás csak a színárnyalatot hordozó tokeneket írja
+   felül (hátterek, accent, másodlagos/harmadlagos szöveg). A fenti
+   glass felületek, glow-k és wash-ek a --accent-primary-ból vannak
+   levezetve color-mix-szel, így minden téma automatikusan helyesen
+   színeződik, ismétlés nélkül.
    ================================================================== */
 
-/* ---------- Deep Blue & Grey ---------- */
+/* ---------- Sötét Kék és Szürke ---------- */
 [data-theme="blue-deep"] {
     --bg-primary: hsl(224 22% 7%);
     --bg-secondary: hsl(224 22% 11%);
@@ -171,7 +194,7 @@
     --text-tertiary: hsl(240 8% 62%);
 }
 
-/* ---------- Medium Blue & Grey ---------- */
+/* ---------- Közepes Kék és Szürke ---------- */
 [data-theme="blue"] {
     --bg-primary: hsl(218 20% 9%);
     --bg-secondary: hsl(218 20% 13%);
@@ -238,7 +261,7 @@
     --text-tertiary: hsl(220 8% 65%);
 }
 
-/* ---------- Light Blue & Grey ---------- */
+/* ---------- Világos Kék és Szürke ---------- */
 [data-theme="blue-sky"] {
     --bg-primary: hsl(212 18% 10%);
     --bg-secondary: hsl(212 18% 14%);
@@ -305,7 +328,7 @@
     --text-tertiary: hsl(216 7% 66%);
 }
 
-/* ---------- Vivid Blue — a 4th, more saturated blue tier ---------- */
+/* ---------- Élénk Kék — egy 4., telítettebb kék szint ---------- */
 [data-theme="blue-royal"] {
     --bg-primary: hsl(230 20% 9%);
     --bg-secondary: hsl(230 20% 13%);
@@ -339,9 +362,9 @@
     --text-tertiary: hsl(198 18% 62%);
 }
 
-/* ---------- Tinted Grey — a 4th grey tier: one moodier/darker, one
-   cooler, one warmer, rounding out the family beyond neutral depth/light
-   variants ---------- */
+/* ---------- Árnyalt Szürke — egy 4. szürke szint: egy hangulatosabb/
+   sötétebb, egy hidegebb, egy melegebb, kikerekítve a családot a semleges
+   mély/világos változatokon túl ---------- */
 [data-theme="grey-graphite"] {
     --bg-primary: hsl(220 12% 6%);
     --bg-secondary: hsl(220 12% 10%);
@@ -375,7 +398,7 @@
     --text-tertiary: hsl(32 12% 62%);
 }
 
-/* ---------- Vibrant ---------- */
+/* ---------- Élénk (Vibrant) ---------- */
 [data-theme="purple"] {
     --bg-primary: hsl(252 24% 9%);
     --bg-secondary: hsl(252 24% 13%);
@@ -476,7 +499,7 @@
 }
 
 /* ==================================================================
-   BASE
+   ALAP (BASE)
    ================================================================== */
 body {
     font-family: var(--font-sans);
@@ -492,8 +515,9 @@ body {
     transition: background 0.5s ease;
 }
 
-/* Form controls don't inherit font-size from body by default — give them
-   the same 14px baseline; more specific icon-sized buttons override this. */
+/* A form-vezérlők alapból nem öröklik a body font-size-át — adjuk meg
+   nekik ugyanazt a 14px-es alapértéket; a specifikusabb, ikon-méretű
+   gombok ezt felülírják. */
 input,
 select,
 textarea,
@@ -531,7 +555,7 @@ select:focus-visible,
     background: var(--accent-primary);
 }
 
-/* Glass card — shared translucent surface used across most panels */
+/* Glass card — a legtöbb panelen közösen használt, áttetsző felület */
 .glass-card {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -580,12 +604,13 @@ select:focus-visible,
 }
 
 /* ==================================================================
-   BUTTON SYSTEM
-   Every clickable control in the app maps to one of these treatments:
-   primary (filled gradient) / secondary (soft surface) / chip (pill
-   toggle) / icon (circular accent) / danger (circular delete) /
-   ghost (dashed "add new"). Component sections below only add
-   layout-specific rules (position, size overrides).
+   GOMB-RENDSZER (BUTTON SYSTEM)
+   Az alkalmazás minden kattintható vezérlője e stílusok egyikére van
+   leképezve: primary (kitöltött gradiens) / secondary (lágy felület) /
+   chip (pill-alakú kapcsoló) / icon (kör alakú accent) / danger (kör
+   alakú törlés) / ghost (szaggatott "új hozzáadása"). A lenti
+   komponens-szekciók csak elrendezés-specifikus szabályokat (pozíció,
+   méret-felülírás) adnak hozzá.
    ================================================================== */
 button {
     font-family: var(--font-sans);
@@ -594,10 +619,11 @@ button {
     color: inherit;
 }
 
-/* --- Primary: filled accent gradient, the main action in its area ---
-   .btn-primary is the reusable form of this — apply it directly to any new
-   "main action" button instead of appending another id/class to this list.
-   (The ids/classes below predate that convention and stay for compat.) */
+/* --- Primary: kitöltött accent gradiens, a fő művelet az adott területen ---
+   A .btn-primary ennek az újrafelhasználható formája — ezt alkalmazzuk
+   közvetlenül minden új "fő művelet" gombra, ahelyett hogy újabb id/
+   class-t fűznénk ehhez a listához. (A lenti id-k/class-ok e konvenció
+   előttről maradtak itt, kompatibilitás miatt.) */
 #search-btn,
 #edit-btn,
 #add-shortcut-btn,
@@ -634,7 +660,7 @@ button {
     box-shadow: var(--shadow-sm);
 }
 
-/* --- Secondary: soft neutral surface, supporting actions --- */
+/* --- Secondary: lágy, semleges felület, kiegészítő műveletekhez --- */
 .action-btn,
 .reset {
     background: var(--bg-tertiary);
@@ -658,7 +684,7 @@ button {
     transform: translateY(0);
 }
 
-/* Search bar row buttons align to the row's fixed control height */
+/* A keresősáv gombjai a sor fix vezérlő-magasságához igazodnak */
 .search-bar #search-btn {
     height: var(--control-height);
     padding: 0 var(--spacing-md);
@@ -676,7 +702,7 @@ button {
     grid-area: advanced;
 }
 
-/* --- Chip: compact pill toggles --- */
+/* --- Chip: kompakt, pill-alakú kapcsolók --- */
 .toggle-btn,
 .compact-checkboxes label {
     background: var(--bg-tertiary);
@@ -715,7 +741,7 @@ button {
     accent-color: var(--accent-primary);
 }
 
-/* --- Icon: circular accent/glass buttons for compact utility actions --- */
+/* --- Icon: kör alakú accent/glass gombok, kompakt segédműveletekhez --- */
 .icon-btn,
 .add-shortcut-to-container,
 .theme-toggle-btn {
@@ -727,9 +753,9 @@ button {
     transition: var(--transition);
 }
 
-/* icon-btn is the shared "glass circle" look — used directly by the
-   always-visible advanced-search trigger, and via .quick-tool-btn by the
-   currency/time triggers that only reveal themselves at small screens. */
+/* Az icon-btn a közös "üveg kör" kinézet — közvetlenül ezt használja a
+   mindig látható részletes keresés trigger, illetve a .quick-tool-btn-en
+   keresztül a valuta/idő triggerek, amik csak kis képernyőn jelennek meg. */
 .icon-btn,
 .theme-toggle-btn {
     background: var(--glass-bg);
@@ -801,9 +827,10 @@ button {
     transform: rotate(45deg);
 }
 
-/* Quick tools — compact triggers that reveal the currency/time panels as
-   icon-anchored popovers once their inline layout no longer fits. Hidden
-   by default; each icon is switched on at its own breakpoint below. */
+/* Quick tools — kompakt triggerek, amik a valuta/idő paneleket ikonhoz
+   igazított popoverként mutatják meg, ha a soron belüli elrendezésük már
+   nem fér el. Alapból rejtve; minden ikon a saját töréspontjánál kapcsol
+   be, lentebb. */
 .quick-tools {
     display: none;
     gap: var(--spacing-xs);
@@ -813,7 +840,7 @@ button {
     display: none;
 }
 
-/* --- Danger: small circular delete controls, one look everywhere --- */
+/* --- Danger: apró, kör alakú törlés-vezérlők, egységes kinézettel --- */
 .delete-container-btn,
 .delete-shortcut-btn,
 .delete-tool-btn,
@@ -875,7 +902,7 @@ button {
     right: -7px;
 }
 
-/* --- Ghost: dashed "add new" wells --- */
+/* --- Ghost: szaggatott keretű "új hozzáadása" mezők --- */
 .add-container-btn,
 .new-section-btn {
     background: var(--accent-wash);
@@ -907,13 +934,14 @@ button {
 }
 
 /* ==================================================================
-   FORM CONTROLS
+   FORM-VEZÉRLŐK (FORM CONTROLS)
 
-   One rule set, keyed off the actual input types, instead of a hand-kept
-   allowlist of ids/classes — every text-like field in the app (including
-   ones added later) is themed automatically instead of silently falling
-   back to the unstyled browser default the moment someone forgets to add
-   its selector to a list.
+   Egyetlen szabályhalmaz, a tényleges input type-okra kulcsolva, nem
+   pedig egy kézzel karbantartott id/class engedélyezőlistára — így az
+   alkalmazás minden szöveg-jellegű mezője (a később hozzáadottak is)
+   automatikusan témázott lesz, ahelyett hogy csendben visszaesne a
+   stílus nélküli böngésző-alapértelmezésre, amint valaki elfelejti
+   hozzáadni a szelektorát egy listához.
    ================================================================== */
 input[type="text"],
 input[type="number"],
@@ -978,7 +1006,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   LAYOUT
+   ELRENDEZÉS (LAYOUT)
    ================================================================== */
 .top-section {
     display: flex;
@@ -994,8 +1022,8 @@ textarea:focus {
     flex-direction: column;
 }
 
-/* Fixed, not proportional — the search column stays exactly this wide
-   regardless of viewport width, so it never resizes itself. */
+/* Fix, nem arányos — a kereső-oszlop mindig pontosan ennyi széles marad,
+   a viewport szélességétől függetlenül, így soha nem méretezi át magát. */
 .left-half {
     flex: 0 0 340px;
     max-width: 340px;
@@ -1011,7 +1039,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   SEARCH BAR
+   KERESŐSÁV (SEARCH BAR)
    ================================================================== */
 .search-bar {
     --control-height: 36px;
@@ -1046,7 +1074,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   ADVANCED SEARCH
+   RÉSZLETES KERESÉS (ADVANCED SEARCH)
    ================================================================== */
 .advanced-search {
     display: none;
@@ -1104,7 +1132,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   TOOLS ROW — Currency Exchanger + Time Tools
+   ESZKÖZ-SOR (TOOLS ROW) — Valutaváltó + Time Tools
    ================================================================== */
 .tools-row {
     display: flex;
@@ -1204,9 +1232,10 @@ textarea:focus {
 
 /* ==================================================================
    TIME TOOLS
-   Layout: mode tabs on top, a big full-width display in the middle,
-   playback controls (Start/Pause + Reset) filling the bottom row — no
-   more empty margins flanking a small centered number.
+   Elrendezés: mód-fülek felül, egy nagy, teljes szélességű kijelző
+   középen, a lejátszás-vezérlők (Start/Pause + Reset) töltik ki az
+   alsó sort — nincs több üres margó egy kicsi, középre igazított
+   szám két oldalán.
    ================================================================== */
 .time-tools {
     display: flex;
@@ -1279,10 +1308,10 @@ textarea:focus {
     animation: pulse 1s infinite;
 }
 
-/* --- Progress bar under Timer's and Pomodoro's counters — spacing above
-   it comes ONLY from the parent's flex gap (.timer / .pomodoro-panel);
-   no margin-top here too, or the two stack into a bigger gap than
-   intended. --- */
+/* --- Haladás-sáv a Timer és a Pomodoro számlálói alatt — a fölötte lévő
+   térköz KIZÁRÓLAG a szülő flex gap-jéből jön (.timer / .pomodoro-panel);
+   ide ne kerüljön margin-top is, mert a kettő összeadódva a tervezettnél
+   nagyobb rést eredményezne. --- */
 .time-progress {
     width: 100%;
     height: 16px;
@@ -1315,9 +1344,9 @@ textarea:focus {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
 }
 
-/* Equal gap on both sides of the colon — the digit spans it sits between
-   have no spacing of their own, so this is the only source of it and
-   can't end up lopsided the way incidental markup whitespace would. */
+/* Egyenlő rés a kettőspont mindkét oldalán — a köztük lévő digit span-oknak
+   nincs saját térközük, így ez az egyetlen forrása, és emiatt nem tud
+   aszimmetrikussá válni úgy, ahogy egy véletlen markup-whitespace tudna. */
 .time-segment {
     color: var(--text-tertiary);
     display: inline-block;
@@ -1344,11 +1373,12 @@ textarea:focus {
 }
 
 /* ==================================================================
-   QUICK TOOL POPOVERS
-   When a quick-tool-btn is clicked, JS adds .popover-panel to the
-   matching panel (.advanced-search / .currency-exchanger / .time-tools)
-   and sets --popover-top/--popover-left from the icon's position, so
-   the panel grows out of the icon instead of the middle of the screen.
+   QUICK TOOL POPOVEREK
+   Amikor egy quick-tool-btn-re kattintanak, a JS hozzáadja a
+   .popover-panel osztályt a megfelelő panelhez (.advanced-search /
+   .currency-exchanger / .time-tools), és beállítja a --popover-top/
+   --popover-left értékét az ikon pozíciója alapján, így a panel az
+   ikonból "nő ki", nem a képernyő közepéből.
    ================================================================== */
 .advanced-search.popover-panel,
 .currency-exchanger.popover-panel,
@@ -1389,11 +1419,11 @@ textarea:focus {
 }
 
 /* ==================================================================
-   PAGE CONTROLS — theme customizer + the central Edit button, fixed in
-   the bottom-right corner, above the bottom bar. --bottom-bar-actual-height
-   is kept live by a ResizeObserver in bottomBar.js, since the bar can wrap
-   onto extra rows (falls back to the single-row --bottom-bar-row guess
-   only for the first paint, before that JS has run once).
+   PAGE CONTROLS — a téma testreszabó + a központi Edit gomb, a jobb alsó
+   sarokban rögzítve, az alsó eszköztár fölött. A --bottom-bar-actual-height
+   értékét a bottomBar.js-beli ResizeObserver tartja élőben, mivel a sáv
+   több sorba is törhet (csak az első kirajzoláskor esik vissza az
+   egysoros --bottom-bar-row becslésre, mielőtt a JS egyszer lefutott volna).
    ================================================================== */
 .page-controls {
     position: fixed;
@@ -1405,9 +1435,9 @@ textarea:focus {
     z-index: 200;
 }
 
-/* Import/Export sit in this cluster too — scale the shared .icon-btn look
-   (32px elsewhere) up to match the gear button's 44px so the row reads as
-   one consistent set of controls. */
+/* Az Import/Export is ebben a csoportban ül — a közös .icon-btn kinézetet
+   (máshol 32px) felskálázva a fogaskerék-gomb 44px-éhez, hogy a sor egy
+   egységes vezérlőcsoportnak hasson. */
 .page-controls .icon-btn {
     width: 44px;
     height: 44px;
@@ -1425,8 +1455,8 @@ textarea:focus {
     position: relative;
 }
 
-/* Anchored at the bottom of the screen now, so the panel opens upward
-   (from the gear button) instead of dropping off the bottom edge. */
+/* Most már a képernyő aljához van rögzítve, így a panel felfelé nyílik
+   (a fogaskerék-gombtól), ahelyett hogy lelógna az alsó szélen túl. */
 .theme-customizer {
     position: absolute;
     bottom: calc(100% + var(--spacing-sm));
@@ -1451,8 +1481,9 @@ textarea:focus {
     display: block;
 }
 
-/* Settings (toggles/buttons) on the left, color swatches on the right —
-   wide enough for both side by side instead of one long scrolling column. */
+/* Beállítások (kapcsolók/gombok) balra, szín-minták jobbra — elég széles
+   ahhoz, hogy a kettő egymás mellett férjen el, ne egy hosszú, görgethető
+   oszlopban. */
 .theme-customizer-columns {
     display: flex;
     align-items: flex-start;
@@ -1481,7 +1512,7 @@ textarea:focus {
     margin-bottom: var(--spacing-md);
 }
 
-/* Family name (Blue / Grey / Vibrant) — one clear header per hue family. */
+/* Család neve (Blue / Grey / Vibrant) — egy egyértelmű fejléc családonként. */
 .theme-section h4 {
     font-size: var(--fs-xs);
     font-weight: var(--fw-semibold);
@@ -1491,9 +1522,9 @@ textarea:focus {
     letter-spacing: 0.06em;
 }
 
-/* Depth/character tier within a family (Deep / Medium / Light / Vivid) —
-   deliberately quieter than the family h4 above it, so the eye reads
-   "Blue" once and then just scans down through its tiers. */
+/* Mélység/jelleg szint egy családon belül (Deep / Medium / Light / Vivid) —
+   szándékosan visszafogottabb, mint a fölötte lévő család-h4, hogy a szem
+   egyszer olvassa el a "Blue"-t, utána csak lefelé pásztázza a szintjeit. */
 .theme-tier {
     margin-bottom: var(--spacing-sm);
 }
@@ -1575,7 +1606,7 @@ textarea:focus {
 .theme-option[data-theme="amber"] { background: linear-gradient(135deg, hsl(42 62% 58%), hsl(58 55% 45%)); }
 .theme-option[data-theme="indigo"] { background: linear-gradient(135deg, hsl(265 52% 66%), hsl(281 46% 53%)); }
 
-/* --- Settings toggle (Low Detail Mode switch) --- */
+/* --- Beállítás-kapcsoló (Low Detail Mode kapcsoló) --- */
 .settings-section {
     padding-bottom: var(--spacing-md);
     border-bottom: 1px solid var(--glass-border);
@@ -1638,7 +1669,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   SHORTCUTS
+   SHORTCUT-OK
    ================================================================== */
 .shortcuts-wrapper {
     display: flex;
@@ -1660,18 +1691,19 @@ textarea:focus {
     gap: var(--spacing-md);
     padding: var(--spacing-md);
     position: relative;
-    /* flex-grow uses each container's own configured width as its growth
-       weight, so any leftover space in a row (one wraps away, one gets
-       deleted, one gets dragged into a different row) is redistributed
-       proportionally to the containers left behind — a row is always
-       filled edge-to-edge instead of leaving a gap. */
+    /* A flex-grow minden konténer saját, beállított szélességét használja
+       növekedési súlyként, így egy sorban maradó szabad hely (az egyik
+       lecsordul, a másikat törlik, a harmadikat egy másik sorba húzzák)
+       arányosan újraelosztásra kerül az ott maradt konténerek között —
+       egy sor mindig szélétől szélig kitöltött, sosem marad benne rés. */
     flex: var(--container-grow, 1) 1 calc(var(--container-width, 100%) - var(--spacing-md));
     min-width: 280px;
     max-width: 100%;
 }
 
-/* Outline (not border) so entering edit mode never nudges the box's own
-   content width/height — no layout shift just from toggling edit mode. */
+/* Outline (nem border), hogy a szerkesztő módba lépés sose tolja el a
+   doboz saját tartalmának szélességét/magasságát — a szerkesztő mód
+   kapcsolgatása önmagában sosem okoz elrendezés-ugrást. */
 .shortcuts-container.editable {
     outline: 2px dashed var(--accent-primary);
     outline-offset: -2px;
@@ -1795,10 +1827,10 @@ textarea:focus {
     object-fit: cover;
 }
 
-/* Wrap onto a second line when a multi-word name doesn't fit on one ("Brave
-   settings" -> two lines); short single-word names just stay on one line
-   naturally. Only truncates with an ellipsis if it's still too long after
-   wrapping once. */
+/* Második sorba törik, ha egy több szóból álló név nem fér el egyben
+   ("Brave settings" -> két sor); a rövid, egyszavas nevek természetesen
+   egy sorban maradnak. Csak akkor vág le "..."-tal, ha egyszeri törés
+   után is még túl hosszú. */
 .shortcut-name {
     font-size: var(--shortcut-font, 0.75rem);
     line-height: 1.25;
@@ -1832,8 +1864,8 @@ textarea:focus {
     flex: 7;
 }
 
-/* Edit-shortcut popover — opens next to the icon that was clicked in edit
-   mode, positioned via JS-set left/top rather than a fixed anchor. */
+/* Edit-shortcut popover — a szerkesztő módban megkattintott ikon mellett
+   nyílik meg, JS által beállított left/top pozícióval, nem fix helyen. */
 .edit-shortcut-popover {
     display: none;
     flex-direction: column;
@@ -1867,7 +1899,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   BOTTOM BAR
+   ALSÓ ESZKÖZTÁR (BOTTOM BAR)
    ================================================================== */
 .bottom-section {
     position: fixed;
@@ -1974,8 +2006,9 @@ textarea:focus {
 }
 
 /* ==================================================================
-   QR CODE GENERATOR — its own card in the left column, right below
-   Currency/Time Tools. Same padding/width convention as its siblings.
+   QR-KÓD GENERÁTOR — saját kártya a bal oszlopban, közvetlenül a
+   Valutaváltó/Time Tools alatt. Ugyanaz a padding/szélesség konvenció,
+   mint a testvér-kártyáinál.
    ================================================================== */
 .qr-widget {
     padding: var(--spacing-md);
@@ -2004,9 +2037,10 @@ textarea:focus {
     transition: var(--transition-fast);
 }
 
-/* The [hidden] attribute alone loses to the class's own `display: flex`
-   (author styles beat the UA stylesheet's [hidden] rule regardless of
-   specificity) — this makes hiding it actually work. */
+/* Önmagában a [hidden] attribútum veszítene a class saját `display: flex`
+   szabályával szemben (a szerzői stílusok specificitástól függetlenül
+   felülírják a UA-stíluslap [hidden] szabályát) — ez teszi ténylegesen
+   működővé az elrejtést. */
 .qr-output[hidden] {
     display: none;
 }
@@ -2038,7 +2072,7 @@ textarea:focus {
     cursor: default;
 }
 
-/* --- QR full-size modal --- */
+/* --- QR teljes méretű modal --- */
 .qr-modal-overlay {
     display: none;
     position: fixed;
@@ -2117,39 +2151,43 @@ textarea:focus {
 }
 
 /* ==================================================================
-   POMODORO — third Time Tools tab. Bold/high-contrast on purpose (a
-   focus timer should read at a glance): a big phase pill, big digits,
-   matching the glow treatment stopwatch/timer already use. Deliberately
-   NOT align-items:center — that would shrink the display/progress bar
-   to fit their content, leaving them narrower than Timer's. Same gap
-   and no padding-top as .timer, and exactly 2 children (display,
-   progress bar) same as .timer, so the spacing is identical — the
-   phase pill + gear live inside the display row instead of a 3rd item.
+   POMODORO — a Time Tools harmadik füle. Szándékosan félkövér/nagy
+   kontrasztú (egy fókusz-időzítőt egy pillantásra kell tudni leolvasni):
+   nagy fázis-pill, nagy számjegyek, ugyanaz a glow-kezelés, amit a
+   stopwatch/timer már használ. Szándékosan NEM align-items:center —
+   az összezsugorítaná a kijelzőt/haladás-sávot a tartalmukhoz képest,
+   keskenyebbre hagyva őket, mint a Timer-ét. Ugyanaz a gap és nincs
+   padding-top, mint a .timer-nél, és pontosan 2 gyerek eleme van
+   (kijelző, haladás-sáv), mint a .timer-nek, így a térköz azonos — a
+   fázis-pill + fogaskerék a kijelző-soron belül él, nem 3. elemként.
    ================================================================== */
 .pomodoro-panel {
     flex-direction: column;
     gap: var(--spacing-sm);
 }
 
-/* .time-tool-content > div.active {display:block} outranks a bare
-   .timer/.pomodoro-panel selector on specificity, silently overriding
-   their own display:flex back to block — which doesn't break the layout
-   (block-stacked children still read fine) but DOES make `gap` a no-op,
-   since gap only does anything on a flex/grid container. That's why the
-   digits-to-progress-bar spacing went missing after removing the old
-   margin-top workaround: .timer was never actually flex once active, it
-   was margin alone doing the work. This exact form is needed to
-   outrank the generic rule and keep both panels flex once active. */
+/* A .time-tool-content > div.active {display:block} specificitásban
+   felülüti a puszta .timer/.pomodoro-panel szelektort, csendben
+   visszaírva a saját display:flex-üket block-ra — ez nem töri el az
+   elrendezést (a block-ként egymásra pakolt gyerekek még mindig jól
+   néznek ki), DE a `gap`-et hatástalanná teszi, mivel a gap csak
+   flex/grid konténeren csinál bármit. Ezért tűnt el a számjegyek és a
+   haladás-sáv közti térköz a régi margin-top megoldás eltávolítása
+   után: a .timer valójában sosem volt flex, amikor aktív volt, csak a
+   margin végezte a munkát. Pontosan ez a forma kell ahhoz, hogy
+   felülüljük az általános szabályt, és mindkét panel flex maradjon
+   aktív állapotban. */
 .time-tool-content > .timer.active,
 .time-tool-content > .pomodoro-panel.active {
     display: flex;
 }
 
-/* The clock digits sit where Timer's "00:00" would start (left-aligned,
-   same box padding) with the phase pill + gear riding along on the same
-   row, using the room Pomodoro's shorter M:SS leaves free. Tight gap here
-   (not --spacing-sm) — every px matters on a 340px-wide card once the
-   phase pill has to fit "SHORT BREAK" next to it. */
+/* Az óra-számjegyek ott ülnek, ahol a Timer "00:00"-ja kezdődne
+   (balra igazítva, ugyanaz a doboz-padding), a fázis-pill + fogaskerék
+   ugyanabban a sorban "utazik", kihasználva a helyet, amit a Pomodoro
+   rövidebb M:SS formátuma szabadon hagy. Itt szoros a gap (nem
+   --spacing-sm) — egy 340px széles kártyán minden px számít, ha a
+   fázis-pillnek a "SHORT BREAK" is el kell férjen mellette. */
 .pomodoro-panel .display {
     display: flex;
     align-items: center;
@@ -2158,13 +2196,14 @@ textarea:focus {
     text-align: left;
 }
 
-/* Digits and the gear are the two things that must never get pushed out —
-   the digits never shrink, the gear never shrink. The phase pill (the one
-   piece of variable-length text — "FOCUS" vs "SHORT BREAK") is capped to
-   roughly one word wide and wraps rather than truncating: "FOCUS" stays a
-   single-line pill, "SHORT BREAK"/"LONG BREAK" become a compact 2-line
-   badge instead of "SHORT BRE…" — always fully readable, no ellipsis,
-   and no magic width per label. */
+/* A számjegyek és a fogaskerék az a két elem, ami sosem szorulhat ki —
+   a számjegyek sosem zsugorodnak, a fogaskerék sosem zsugorodik. A
+   fázis-pill (az egyetlen változó hosszúságú szöveg — "FOCUS" vs.
+   "SHORT BREAK") nagyjából egy szó szélességére van korlátozva, és
+   inkább törik, mint csonkul: a "FOCUS" egysoros pill marad, a
+   "SHORT BREAK"/"LONG BREAK" egy kompakt, 2-soros jelvénnyé válik
+   "SHORT BRE…" helyett — mindig teljesen olvasható, nincs "...", és
+   nincs címkénként "mágikus" szélesség. */
 #pomodoro-time {
     flex-shrink: 0;
 }
@@ -2201,7 +2240,7 @@ textarea:focus {
     flex-shrink: 0;
 }
 
-/* --- Pomodoro settings popover --- */
+/* --- Pomodoro beállítások popover --- */
 .pomodoro-settings-popover {
     width: min(300px, calc(100vw - 24px));
 }
@@ -2238,7 +2277,7 @@ textarea:focus {
 }
 
 /* ==================================================================
-   LOADING PLACEHOLDER
+   TÖLTÉS-HELYKITÖLTŐ (LOADING PLACEHOLDER)
    ================================================================== */
 .loading {
     background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--bg-secondary) 50%, var(--bg-tertiary) 75%);
@@ -2247,11 +2286,12 @@ textarea:focus {
 }
 
 /* ==================================================================
-   RESPONSIVE
+   RESZPONZIVITÁS (RESPONSIVE)
    ================================================================== */
-/* Shortcut icons hold their full base size (--shortcut-size: 50px, set in
-   :root) all the way down to 992px — they only start shrinking once
-   .top-section stacks and the shortcuts column actually loses width. */
+/* A shortcut-ikonok a teljes alapméretüket tartják (--shortcut-size:
+   50px, a :root-ban beállítva) egészen 992px-ig — csak azután kezdenek
+   zsugorodni, hogy a .top-section egymásra pakolódik, és a shortcut-
+   oszlop ténylegesen szélességet veszít. */
 @media screen and (max-width: 1400px) {
     .tools-row {
         flex-direction: column;
@@ -2396,9 +2436,9 @@ textarea:focus {
 }
 
 /* ==================================================================
-   LOW DETAIL MODE
-   Strips blur, motion and gradients for performance. Colour and
-   layout identity are preserved; only expensive GPU work is cut.
+   LOW DETAIL MODE (alacsony részletesség)
+   Teljesítmény miatt eltávolítja a blur-t, a mozgást és a gradienseket.
+   A szín- és elrendezés-identitás megmarad; csak a drága GPU-munka esik ki.
    ================================================================== */
 .low-detail {
     --transition: none;

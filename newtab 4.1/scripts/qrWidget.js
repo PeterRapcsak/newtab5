@@ -1,28 +1,43 @@
-// QR code widget: type or paste text/a URL, get a QR code instantly.
-// Generated fully client-side via the vendored qrcode-generator library —
-// no network call, no external service seeing what you typed. Deliberately
-// not persisted to localStorage either, since whatever's typed here (a
-// wifi password, a private link) shouldn't linger after the tab closes.
-//
-// The inline preview is small (it's a corner widget), so the first time a
-// given typing session produces a valid code it auto-opens a large modal —
-// re-typing after that just updates the already-open modal live instead of
-// re-popping it on every keystroke. Clicking the small preview (re)opens it
-// on demand.
+/*======================================================================
+    qrWidget.js - QR-kód widget
+------------------------------------------------------------------------
+    CÉL:
+     - Beírt/beillesztett szöveg vagy URL azonnali QR-kóddá alakítása
+     - Minden generálás teljesen kliens-oldalon történik, a becsomagolt
+       (vendored) qrcode-generator.js könyvtár segítségével — nincs
+       hálózati hívás, semmilyen külső szolgáltatás nem látja, mit
+       gépeltünk be
+     - Szándékosan NEM kerül localStorage-ba sem, mivel amit ide
+       beírunk (wifi jelszó, privát link) ne maradjon meg a fül
+       bezárása után sem
+    MŰKÖDÉS:
+     - Az apró, sarokba illesztett előnézet mellett egy adott gépelési
+       munkamenetben az ELSŐ érvényes kód automatikusan megnyit egy
+       nagy modalt — az utána történő újragépelés már csak élőben
+       frissíti a már nyitva lévő modal tartalmát, nem nyitja fel újra
+       minden leütésnél
+     - A kis előnézetre kattintva bármikor (újra) megnyitható a modal
+======================================================================*/
 
 import { qrcode } from './qrcode-generator.js';
 
-const DEBOUNCE_MS = 200;
+const DEBOUNCE_MS = 200;       // ennyit vár gépelés után, mielőtt újragenerálná a kódot
 let debounceHandle = null;
-let currentSvg = null;
-let currentText = '';
-let hasAutoOpenedForText = false;
+let currentSvg = null;         // az utoljára legenerált QR-kód SVG markupja
+let currentText = '';          // a hozzá tartozó eredeti szöveg
+let hasAutoOpenedForText = false; // ezen munkamenetben már megtörtént-e az automatikus modal-nyitás
 let modalEl = null;
 
+// CÉL: A kis, beágyazott előnézet konténerének lekérése
 function getOutputEl() {
     return document.getElementById('qr-output');
 }
 
+/*
+    CÉL: A nagy QR-modal létrehozása (csak első hívásra), vagy a már
+    meglévő visszaadása
+     - Kattintás a hátterére (backdrop) / az X gombra -> bezárás
+*/
 function getModal() {
     if (modalEl) return modalEl;
 
@@ -38,23 +53,26 @@ function getModal() {
     document.body.appendChild(modalEl);
 
     modalEl.addEventListener('click', (e) => {
-        if (e.target === modalEl) closeModal(); // click on the backdrop itself
+        if (e.target === modalEl) closeModal(); // magára a háttérre (backdrop) kattintottak
     });
     modalEl.querySelector('.qr-modal-close').addEventListener('click', closeModal);
 
     return modalEl;
 }
 
+// CÉL: A modal bezárása (ha épp létezik)
 function closeModal() {
     if (modalEl) modalEl.classList.remove('open');
 }
 
+// CÉL: A modal tartalmának frissítése az aktuális SVG/szöveg alapján
 function syncModalContent() {
     if (!modalEl) return;
     modalEl.querySelector('.qr-modal-output').innerHTML = currentSvg || '';
     modalEl.querySelector('.qr-modal-text').textContent = currentText;
 }
 
+// CÉL: A modal megnyitása (csak akkor, ha már van legenerált kód)
 function openModal() {
     if (!currentSvg) return;
     getModal();
@@ -62,8 +80,9 @@ function openModal() {
     modalEl.classList.add('open');
 }
 
-// Nothing typed yet: the output box doesn't exist visually at all — no
-// "type something" placeholder taking up space, just the input on its own.
+// Ha még nincs semmi begépelve: a kimenet doboza vizuálisan NEM is
+// létezik — nincs helyfoglaló "írj be valamit" placeholder, csak
+// önmagában a beviteli mező.
 function hideOutput() {
     const el = getOutputEl();
     if (!el) return;
@@ -73,6 +92,7 @@ function hideOutput() {
     closeModal();
 }
 
+// CÉL: Hibaüzenet megjelenítése a kimenet helyén (pld. túl hosszú szöveg esetén)
 function renderError(message) {
     const el = getOutputEl();
     if (!el) return;
@@ -82,6 +102,17 @@ function renderError(message) {
     closeModal();
 }
 
+/*
+    CÉL: QR-kód generálása és megjelenítése a megadott szöveghez
+    BE: text - a kódolandó szöveg/URL
+    LOGIKA:
+     - Üres szöveg esetén elrejti a kimenetet, és nullázza az "ezen
+       munkamenetben már automatikusan megnyitottuk" jelzőt
+     - Sikeres generálás után: ha a modal már nyitva van, csak
+       frissíti; ha még nem volt automatikusan megnyitva ebben a
+       gépelési munkamenetben, megnyitja most
+     - Hiba esetén (pld. a szöveg túl hosszú egyetlen QR-kódhoz) hibaüzenetet ír ki
+*/
 function renderQr(text) {
     const el = getOutputEl();
     if (!el) return;
@@ -93,7 +124,7 @@ function renderQr(text) {
     }
 
     try {
-        const qr = qrcode(0, 'M'); // typeNumber 0 = smallest size that fits the data
+        const qr = qrcode(0, 'M'); // typeNumber 0 = a legkisebb méret, ami még elfér az adat
         qr.addData(text);
         qr.make();
 
@@ -103,9 +134,9 @@ function renderQr(text) {
         el.innerHTML = currentSvg;
 
         if (modalEl && modalEl.classList.contains('open')) {
-            syncModalContent();
+            syncModalContent(); // már nyitva van -> csak frissítés
         } else if (!hasAutoOpenedForText) {
-            openModal();
+            openModal(); // ezen munkamenetben még nem nyílt meg automatikusan -> most igen
             hasAutoOpenedForText = true;
         }
     } catch {
@@ -113,12 +144,18 @@ function renderQr(text) {
     }
 }
 
+// Escape-re bezárja a modalt, ha épp nyitva van
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modalEl && modalEl.classList.contains('open')) {
         closeModal();
     }
 });
 
+/*
+    CÉL: A QR-widget bekötése
+     - Gépelésre (debounce-olva) újragenerálja a kódot
+     - A kis előnézetre kattintva megnyitja a nagy modalt
+*/
 export function initQrWidget() {
     const input = document.getElementById('qr-input');
     const output = getOutputEl();

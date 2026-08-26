@@ -1,20 +1,34 @@
-// On-demand "Refresh Icons" flow: fetches each shortcut/tool's own page,
-// reads the <link rel="icon"> it actually declares (the correct way to find
-// a favicon — most modern sites don't serve one at /favicon.ico), downloads
-// it, and caches a resized copy permanently via icons.js's cache. Only runs
-// when the user clicks the button; never runs in the background.
+/*======================================================================
+    iconRefresh.js - "Refresh Icons" folyamat
+------------------------------------------------------------------------
+    CÉL:
+     - Igény szerint (gombnyomásra) lekéri minden shortcut/tool SAJÁT
+       oldalát, kiolvassa az általa deklarált <link rel="icon">-t (ez a
+       helyes módja a favicon megkeresésének — a legtöbb modern oldal
+       nem szolgál ki favicon.ico-t közvetlenül a gyökérből), letölti,
+       átméretezi, majd véglegesen elmenti icons.js cache-ébe
+     - CSAK akkor fut, ha a felhasználó rákattint a gombra — a háttérben
+       soha nem indul el magától
+======================================================================*/
 
 import { getShortcutsConfig } from './shortcuts.js';
 import { bottomBarConfig } from './bottomBar.js';
 import { setCachedIconUrl } from './icons.js';
 
-const ORIGIN_PATTERNS = ['http://*/*', 'https://*/*'];
-const ICON_SIZE = 64;
+const ORIGIN_PATTERNS = ['http://*/*', 'https://*/*']; // engedélykéréshez: "minden oldal"
+const ICON_SIZE = 64; // ennyi pixelre méretezzük át a letöltött ikonokat
 
 function hasPermissionsApi() {
     return typeof chrome !== 'undefined' && !!chrome.permissions;
 }
 
+//! ---------- JOGOSULTSÁGKEZELÉS (chrome.permissions) ----------
+
+/*
+    CÉL: Megnézni, hogy a felhasználó már megadta-e korábban a
+    jogosultságot (minden oldal olvasása)
+    KI: Promise<boolean> - true, ha már megvan a jogosultság
+*/
 export function isIconRefreshPermissionGranted() {
     return new Promise((resolve) => {
         if (!hasPermissionsApi()) { resolve(false); return; }
@@ -22,8 +36,14 @@ export function isIconRefreshPermissionGranted() {
     });
 }
 
-// Must be called directly from a click handler (no awaits before it) —
-// Chrome requires a user gesture for permission prompts.
+/*
+    CÉL: A jogosultság kikérése a felhasználótól (felugró ablakkal)
+    KI: Promise<boolean> - true, ha megadta
+    MEGJEGYZÉS:
+     - Közvetlenül egy kattintás-eseménykezelőből kell meghívni (await
+       nélkül előtte) — a Chrome csak valódi felhasználói interakcióra
+       (user gesture) engedi megjeleníteni az engedélykérő ablakot
+*/
 export function requestIconRefreshPermission() {
     return new Promise((resolve) => {
         if (!hasPermissionsApi()) { resolve(false); return; }
@@ -31,8 +51,15 @@ export function requestIconRefreshPermission() {
     });
 }
 
+//! ---------- FRISSÍTENDŐ IKONOK ÖSSZEGYŰJTÉSE ----------
+
+/*
+    CÉL: Minden shortcut és bottom bar-tool URL-jének/nevének összegyűjtése
+     - Map-et használunk, hogy azonos URL ne szerepeljen duplán
+    KI: [{ url, name }, ...] tömb
+*/
 function collectIconTargets() {
-    const targets = new Map(); // url -> name, de-duplicated
+    const targets = new Map(); // url -> name, duplikátum-mentesítve
     getShortcutsConfig().containers.forEach((container) => {
         container.shortcuts.forEach((s) => targets.set(s.url, s.name));
     });
@@ -42,6 +69,22 @@ function collectIconTargets() {
     return Array.from(targets, ([url, name]) => ({ url, name }));
 }
 
+//! ---------- A VALÓDI FAVICON MEGKERESÉSE ÉS LETÖLTÉSE ----------
+
+/*
+    CÉL: A letöltött HTML <head>-jéből kiválasztani a "legjobb" ikon-linket
+    BE:
+     - doc: a parse-olt HTML dokumentum
+     - pageUrl: az oldal URL-je (a relatív href-ek feloldásához kell)
+    KI: a kiválasztott ikon abszolút URL-je
+    LOGIKA:
+     - Először minden <link rel="...icon..."> jelöltet összeszed
+     - Ha egy sincs -> egyszerűen a /favicon.ico-t próbálja
+     - A "sizes" attribútum alapján a legnagyobb megadott méretűt
+       választja, ha van ilyen (declaredSize > 0)
+     - Ha egyiknek sincs mérete megadva -> az apple-touch-icon-t
+       részesíti előnyben, különben egyszerűen az első találatot
+*/
 function bestIconHref(doc, pageUrl) {
     const links = Array.from(doc.querySelectorAll(
         'link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"], link[rel="apple-touch-icon-precomposed"]'
@@ -56,14 +99,20 @@ function bestIconHref(doc, pageUrl) {
 
     const best = links
         .slice()
-        .sort((a, b) => declaredSize(b) - declaredSize(a))
-        .find((el) => declaredSize(el) > 0)
-        || links.find((el) => el.getAttribute('rel').includes('apple-touch-icon'))
-        || links[0];
+        .sort((a, b) => declaredSize(b) - declaredSize(a))  // nagyobb méret előre
+        .find((el) => declaredSize(el) > 0)                 // legnagyobb, aminek van méretadata
+        || links.find((el) => el.getAttribute('rel').includes('apple-touch-icon')) // vagy apple-touch-icon
+        || links[0];                                        // vagy egyszerűen az első
 
     return new URL(best.getAttribute('href'), pageUrl).href;
 }
 
+/*
+    CÉL: Egy oldal favicon URL-jének kiderítése
+     - Letölti magát az oldal HTML-jét, DOMParser-rel értelmezi, majd
+       bestIconHref()-fel választja ki belőle a legjobb <link>-et
+    KI: Promise<string> - a favicon abszolút URL-je
+*/
 async function discoverFaviconUrl(pageUrl) {
     const res = await fetch(pageUrl);
     if (!res.ok) throw new Error(`page fetch failed: ${res.status}`);
@@ -72,6 +121,11 @@ async function discoverFaviconUrl(pageUrl) {
     return bestIconHref(doc, pageUrl);
 }
 
+/*
+    CÉL: Az ikon letöltése és ICON_SIZE x ICON_SIZE méretre skálázása
+     - Canvas-ra rajzolja ki, a képarány megtartásával, középre igazítva
+    KI: Promise<string> - PNG data URL
+*/
 async function fetchAndResizeIcon(iconUrl) {
     const res = await fetch(iconUrl);
     if (!res.ok) throw new Error(`icon fetch failed: ${res.status}`);
@@ -83,21 +137,31 @@ async function fetchAndResizeIcon(iconUrl) {
     canvas.height = ICON_SIZE;
     const ctx = canvas.getContext('2d');
 
-    const scale = Math.min(ICON_SIZE / bitmap.width, ICON_SIZE / bitmap.height);
+    const scale = Math.min(ICON_SIZE / bitmap.width, ICON_SIZE / bitmap.height); // képarány megtartása
     const w = bitmap.width * scale;
     const h = bitmap.height * scale;
-    ctx.drawImage(bitmap, (ICON_SIZE - w) / 2, (ICON_SIZE - h) / 2, w, h);
+    ctx.drawImage(bitmap, (ICON_SIZE - w) / 2, (ICON_SIZE - h) / 2, w, h); // középre igazítva
 
     return canvas.toDataURL('image/png');
 }
 
-// Fetches + caches a real icon for every shortcut and bottom-bar tool.
-// Requests the one-time permission grant itself if not already held.
-// onProgress({ done, total, cached, current }) fires after each attempt.
+//! ---------- FŐFOLYAMAT ----------
+
+/*
+    CÉL: Valódi ikon lekérése és cache-elése MINDEN shortcut-hoz és
+    bottom bar-toolhoz
+    BE:
+     - onProgress: opcionális callback, minden próbálkozás UTÁN meghívva,
+       { done, total, cached, current } paraméterrel
+    KI: Promise<{ granted, total, cached }>
+    MEGJEGYZÉS:
+     - Saját maga kéri be az egyszeri jogosultságot, ha még nincs meg
+*/
 export async function refreshAllIcons({ onProgress } = {}) {
-    // request() resolves instantly (no prompt) if already granted, so this is
-    // safe to call unconditionally — and calling it first, with nothing
-    // awaited before it, keeps it inside the click's user-gesture window.
+    // A request() azonnal (felugró ablak nélkül) visszatér, ha már
+    // megvan a jogosultság, ezért ezt feltétel nélkül biztonságos
+    // meghívni — és mivel ez fut le elsőként, await nélkül előtte, a
+    // hívás a kattintás user gesture-jén belül marad
     const granted = await requestIconRefreshPermission();
     if (!granted) {
         return { granted: false, total: 0, cached: 0 };
@@ -114,7 +178,7 @@ export async function refreshAllIcons({ onProgress } = {}) {
             setCachedIconUrl(url, dataUri);
             cached++;
         } catch {
-            // Leave this one to the existing live fallback cascade in icons.js.
+            // Ezt az egyet meghagyjuk az icons.js-ben lévő élő fallback láncnak.
         }
         onProgress?.({ done: i + 1, total: targets.length, cached, current: name });
     }

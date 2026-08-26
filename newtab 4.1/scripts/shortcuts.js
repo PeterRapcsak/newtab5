@@ -1,13 +1,30 @@
+/*======================================================================
+    shortcuts.js - Shortcut-ok (jobb oldali linkgyűjtemény)
+------------------------------------------------------------------------
+    CÉL:
+     - A shortcut-konténerek (linkcsoportok) állapotának kezelése:
+       betöltés/mentés localStorage-ba, kirajzolás, hozzáadás/törlés
+     - Szerkesztő mód: konténerek átrendezése/átméretezése és a benne
+       lévő shortcut-ok átrendezése egérrel húzva (drag & drop, élő
+       előnézettel), illetve popoverből való átnevezés/URL-csere
+    ADATSZERKEZET:
+     - shortcutsConfig.containers = [ { id, name, width, shortcuts:
+       [ {name, url}, ... ] }, ... ]  -> TÖBB konténer is lehet
+       egymás mellett, mindegyiknek saját (%-os) szélessége van
+======================================================================*/
+
 import { domElements } from './dom.js';
 import { applyIcon } from './icons.js';
 
-// New data structure supporting multiple containers
-export let shortcutsConfig = { 
+//! ---------- ÁLLAPOT (state) ----------
+
+// Új adatszerkezet, ami már több konténert is támogat
+export let shortcutsConfig = {
     containers: [
         {
             id: 'container-1',
             name: 'Shortcuts',
-            width: 100, // Percentage width (100 = full row, 50 = half, etc.)
+            width: 100, // Százalékos szélesség (100 = teljes sor, 50 = fél, stb.)
             shortcuts: []
         }
     ]
@@ -15,25 +32,33 @@ export let shortcutsConfig = {
 
 export let isEditMode = false;
 export let isAddMode = false;
-export let activeContainerId = null; // Which container we're adding to
-let draggingShortcut = null; // the .shortcut element currently being dragged
+export let activeContainerId = null; // melyik konténerhez adunk éppen hozzá
+let draggingShortcut = null; // az éppen húzott .shortcut elem
 let dropWasHandled = false;
 let dragGhost = null;
 
-// Container reordering (same live-preview mechanic as shortcut drag & drop)
+// Konténerek átrendezése (ugyanaz az élő-előnézetes mechanika, mint a shortcut drag & drop-nál)
 let draggingContainer = null;
 let containerDropWasHandled = false;
 
-// Resize state
+// Átméretezés állapota
 let isResizing = false;
 let resizingContainerId = null;
 let startX = 0;
 let startWidth = 0;
 
-// Edit-shortcut popover state
+// Edit-shortcut popover állapota
 let editPopoverEl = null;
 let editingShortcut = null; // { containerId, index }
 
+/*
+    CÉL: Shortcut-ra kattintás kezelése
+     - Középső gombbal / Ctrl+kattintás / Cmd+kattintás esetén hagyja,
+       hogy a böngésző alap-viselkedése érvényesüljön (pld. új fülön nyit)
+     - Egyébként megelőzi az alapértelmezett működést, és MAGA navigál
+       (ugyanoda, ahova a link mutat)
+    KI: true, ha hagyta az alap-viselkedést; false, ha maga navigált
+*/
 export function handleShortcutClick(event) {
     if (event.button === 1 || event.ctrlKey || event.metaKey) {
         return true;
@@ -43,20 +68,33 @@ export function handleShortcutClick(event) {
     return false;
 }
 
+// CÉL: Egyedi, időbélyeg + random rész alapú azonosító generálása egy új konténerhez
 function generateContainerId() {
     return 'container-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
 }
 
+//! ---------- KIRAJZOLÁS ----------
+
+/*
+    CÉL: A teljes shortcuts-wrapper újrarajzolása a shortcutsConfig alapján
+     - Minden konténerhez: kártya + benne a shortcut-rács, "hozzáadás"
+       gomb, (szerkesztő módban) törlés gomb és átméretező fogantyú
+     - Szerkesztő módban a végére kerül egy "Add Container" gomb is
+    MEGJEGYZÉS:
+     - Ez a függvény hívódik újra szinte minden állapotváltozás után
+       (hozzáadás, törlés, drag & drop vége, mód váltás, stb.) — a
+       teljes wrapper.innerHTML-t nullázza, majd újraépíti
+*/
 export function renderShortcuts() {
     const wrapper = document.getElementById('shortcuts-wrapper');
     if (!wrapper) {
         console.error('Shortcuts wrapper not found');
         return;
     }
-    
+
     wrapper.innerHTML = '';
     wrapper.className = `shortcuts-wrapper ${isEditMode ? 'edit-mode' : ''}`;
-    
+
     shortcutsConfig.containers.forEach((container, containerIndex) => {
         const containerEl = document.createElement('div');
         containerEl.className = `shortcuts-container glass-card ${isEditMode ? 'editable' : ''}`;
@@ -66,11 +104,11 @@ export function renderShortcuts() {
         containerEl.dataset.containerId = container.id;
         containerEl.draggable = isEditMode;
 
-        // Container controls wrapper (bottom right)
+        // Konténer-vezérlők wrapper-je (jobb alsó sarok)
         const controlsWrapper = document.createElement('div');
         controlsWrapper.className = 'container-controls';
 
-        // Delete container button (only if more than 1 container and in edit mode)
+        // Konténer törlése gomb (csak ha 1-nél több konténer van, és szerkesztő módban)
         if (isEditMode && shortcutsConfig.containers.length > 1) {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-container-btn';
@@ -81,7 +119,7 @@ export function renderShortcuts() {
             controlsWrapper.appendChild(deleteBtn);
         }
 
-        // Shortcuts grid
+        // Shortcut-rács
         const shortcutsGrid = document.createElement('div');
         shortcutsGrid.className = 'shortcuts-grid';
 
@@ -92,7 +130,7 @@ export function renderShortcuts() {
 
         containerEl.appendChild(shortcutsGrid);
 
-        // Add shortcut button
+        // "Shortcut hozzáadása" gomb
         const addBtn = document.createElement('button');
         addBtn.className = 'add-shortcut-to-container';
         addBtn.draggable = false;
@@ -106,7 +144,7 @@ export function renderShortcuts() {
         controlsWrapper.appendChild(addBtn);
         containerEl.appendChild(controlsWrapper);
 
-        // Resize handle (only in edit mode)
+        // Átméretező fogantyú (csak szerkesztő módban)
         if (isEditMode) {
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
@@ -118,11 +156,11 @@ export function renderShortcuts() {
 
         wrapper.appendChild(containerEl);
 
-        // Setup drag and drop for shortcuts within this container
+        // Drag & drop bekötése az EBBEN a konténerben lévő shortcut-okhoz
         setupShortcutDragDrop(containerEl);
     });
 
-    // Add "Add Container" button at the end (only in edit mode)
+    // "Add Container" gomb hozzáadása a végére (csak szerkesztő módban)
     if (isEditMode) {
         const addContainerBtn = document.createElement('button');
         addContainerBtn.className = 'add-container-btn glass-card';
@@ -130,19 +168,28 @@ export function renderShortcuts() {
         addContainerBtn.addEventListener('click', addNewContainer);
         wrapper.appendChild(addContainerBtn);
 
-        // Container reordering — same live-preview drag mechanic as shortcuts,
-        // only wired up while editing.
+        // Konténerek átrendezése — ugyanaz az élő-előnézetes drag
+        // mechanika, mint a shortcut-oknál, csak szerkesztéskor van bekötve.
         setupContainerDragDrop(wrapper);
     }
 }
 
+/*
+    CÉL: Egyetlen shortcut DOM elemének felépítése (ikon + link + név,
+    szerkesztő módban törlés gombbal is)
+    BE:
+     - shortcut: { name, url }
+     - index: pozíciója a saját konténerén belül
+     - containerId: melyik konténerhez tartozik
+    KI: a felépített .shortcut elem
+*/
 function createShortcutElement(shortcut, index, containerId) {
     const shortcutEl = document.createElement('div');
     shortcutEl.className = 'shortcut';
     shortcutEl.setAttribute('draggable', 'true');
     shortcutEl.dataset.index = index.toString();
     shortcutEl.dataset.containerId = containerId;
-    shortcutEl.__shortcut = shortcut; // stable reference back to the data object, survives live drag reordering
+    shortcutEl.__shortcut = shortcut; // stabil visszahivatkozás az adatobjektumra, túléli az élő drag-átrendezést is
 
     const linkElement = document.createElement('a');
     linkElement.href = shortcut.url;
@@ -151,15 +198,16 @@ function createShortcutElement(shortcut, index, containerId) {
     imgElement.alt = shortcut.name;
     applyIcon(imgElement, shortcut.url, shortcut.name);
     linkElement.appendChild(imgElement);
-    
+
     const nameSpan = document.createElement('span');
     nameSpan.className = 'shortcut-name';
     nameSpan.textContent = shortcut.name;
-    
+
     shortcutEl.appendChild(linkElement);
     shortcutEl.appendChild(nameSpan);
-    
+
     if (isEditMode) {
+        // Szerkesztő módban a kattintás NEM navigál, hanem megnyitja a szerkesztő popovert
         linkElement.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -179,11 +227,20 @@ function createShortcutElement(shortcut, index, containerId) {
     return shortcutEl;
 }
 
-// Live-preview drag & drop: as the dragged tile passes over another tile (or
-// empty grid space), it is actually moved in the DOM right then, so the grid
-// always shows exactly what dropping right now would produce. The underlying
-// config is only rebuilt (from the live DOM order) once the drop completes;
-// a cancelled drag just re-renders from the untouched saved config instead.
+//! ---------- SHORTCUT DRAG & DROP ----------
+
+/*
+    CÉL: Egy adott konténer shortcut-jaihoz tartozó drag & drop bekötése
+    BE: containerEl - a konténer DOM eleme
+    LOGIKA (élő előnézet):
+     - Ahogy a húzott elem elhalad egy másik csempe (vagy az üres rács-
+       terület) felett, azonnal, TÉNYLEGESEN átmozgatjuk a DOM-ban, így a
+       rács mindig pontosan azt mutatja, amit az adott pillanatban való
+       elengedés eredményezne
+     - A mögöttes konfiguráció csak a drop VÉGÉN épül újra (az élő DOM-
+       sorrendből); egy megszakított húzás egyszerűen visszarajzol a
+       még érintetlen mentett konfigurációból
+*/
 function setupShortcutDragDrop(containerEl) {
     const shortcutsGrid = containerEl.querySelector('.shortcuts-grid');
 
@@ -197,6 +254,8 @@ function setupShortcutDragDrop(containerEl) {
 
             createDragGhost(shortcutEl);
 
+            // 1x1 pixeles átlátszó GIF -> a böngésző natív "húzás" képe
+            // helyett a saját dragGhost elemünk látszik
             const emptyImg = new Image();
             emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
             e.dataTransfer.setDragImage(emptyImg, 0, 0);
@@ -217,7 +276,7 @@ function setupShortcutDragDrop(containerEl) {
             });
 
             if (!dropWasHandled) {
-                // Dropped outside any valid target — snap the live preview back.
+                // Érvényes célponton kívül engedte el -> az élő előnézet visszaugrik
                 renderShortcuts();
             }
             draggingShortcut = null;
@@ -229,6 +288,7 @@ function setupShortcutDragDrop(containerEl) {
 
             if (!draggingShortcut || draggingShortcut === shortcutEl) return;
 
+            // Az elem melyik felén (bal/jobb) van a kurzor -> elé vagy mögé kerüljön
             const box = shortcutEl.getBoundingClientRect();
             const isAfter = e.clientX - box.left > box.width / 2;
             const target = isAfter ? shortcutEl.nextSibling : shortcutEl;
@@ -245,7 +305,7 @@ function setupShortcutDragDrop(containerEl) {
         });
     });
 
-    // Dropping on empty space (empty container, or past the last shortcut)
+    // Elengedés üres területen (üres konténer, vagy az utolsó shortcut mögött)
     shortcutsGrid.addEventListener('dragover', (e) => {
         e.preventDefault();
         containerEl.classList.add('drag-over');
@@ -268,13 +328,18 @@ function setupShortcutDragDrop(containerEl) {
     });
 }
 
+/*
+    CÉL: A shortcut-húzás lezárása: az élő DOM-sorrend visszaírása az
+    adatmodellbe, majd mentés és újrarajzolás
+    MEGJEGYZÉS:
+     - A DOM-sorrend MÁR pontosan az, amit a felhasználó az előnézetben
+       látott -> konténerenként egyszerűen csak visszaolvassuk
+*/
 function finalizeShortcutDrop() {
     if (!draggingShortcut) return;
     dropWasHandled = true;
     removeDragGhost();
 
-    // The DOM order is already the live preview the user was looking at —
-    // just read it back into the data model, per container.
     shortcutsConfig.containers.forEach(container => {
         const containerEl = document.getElementById(container.id);
         if (!containerEl) return;
@@ -287,14 +352,23 @@ function finalizeShortcutDrop() {
     renderShortcuts();
 }
 
-// Container reordering — same live-preview mechanic as shortcut drag & drop:
-// the dragged card is actually moved in the DOM as it passes over a sibling,
-// so the wrapper always shows exactly what dropping right now would produce.
+//! ---------- KONTÉNER DRAG & DROP (átrendezés) ----------
+
+/*
+    CÉL: A konténerek (mint egész kártyák) átrendezésének bekötése
+    BE: wrapper - a #shortcuts-wrapper elem
+    MEGJEGYZÉS:
+     - Ugyanaz az élő-előnézetes mechanika, mint a shortcut drag &
+       drop-nál: a húzott kártya ténylegesen átmozog a DOM-ban, ahogy
+       elhalad egy szomszédja felett, így a wrapper mindig pontosan
+       azt mutatja, amit az adott pillanatban való elengedés eredményezne
+*/
 function setupContainerDragDrop(wrapper) {
     wrapper.querySelectorAll(':scope > .shortcuts-container').forEach((containerEl) => {
         containerEl.addEventListener('dragstart', (e) => {
-            // Ignore drags that bubbled up from a shortcut/control inside —
-            // only a drag that started on the card itself reorders containers.
+            // Ha a húzás egy belső shortcut-ról/vezérlőről buborékolt fel,
+            // azt itt figyelmen kívül hagyjuk — konténert csak a kártyán
+            // magán elindított húzás rendez át.
             if (e.target !== containerEl) return;
 
             draggingContainer = containerEl;
@@ -322,7 +396,7 @@ function setupContainerDragDrop(wrapper) {
             removeDragGhost();
 
             if (!containerDropWasHandled) {
-                // Dropped outside any valid target — snap the live preview back.
+                // Érvényes célponton kívül engedte el -> az élő előnézet visszaugrik
                 renderShortcuts();
             }
             draggingContainer = null;
@@ -359,13 +433,16 @@ function setupContainerDragDrop(wrapper) {
     });
 }
 
+/*
+    CÉL: A konténer-húzás lezárása: az élő DOM-sorrend visszaírása
+    (containers tömb újrarendezése), majd mentés és újrarajzolás
+*/
 function finalizeContainerDrop(wrapper) {
     if (!draggingContainer) return;
     containerDropWasHandled = true;
     removeDragGhost();
 
-    // The DOM order is already the live preview the user was looking at —
-    // just read it back into the data model.
+    // A DOM-sorrend már pontosan az, amit a felhasználó az előnézetben látott
     const orderedIds = Array.from(wrapper.querySelectorAll(':scope > .shortcuts-container'))
         .map(el => el.dataset.containerId);
 
@@ -375,6 +452,14 @@ function finalizeContainerDrop(wrapper) {
     renderShortcuts();
 }
 
+//! ---------- HÚZÁS KÖZBENI "SZELLEM" (GHOST) ELŐNÉZET ----------
+
+/*
+    CÉL: A húzott elem egy lebegő másolatának ("ghost") létrehozása,
+    ami az egérmutatót követi húzás közben
+     - A törlés/hozzáadás/átméretező gombokat eltávolítja a másolatból
+       (ne legyenek rajta kattintható vezérlők)
+*/
 function createDragGhost(element) {
     removeDragGhost();
 
@@ -392,6 +477,7 @@ function createDragGhost(element) {
     document.body.appendChild(dragGhost);
 }
 
+// CÉL: A ghost-előnézet eltávolítása, ha épp létezik
 function removeDragGhost() {
     if (dragGhost) {
         dragGhost.remove();
@@ -399,7 +485,18 @@ function removeDragGhost() {
     }
 }
 
-// Resize functionality
+//! ---------- KONTÉNER ÁTMÉRETEZÉSE ----------
+
+/*
+    CÉL: Átméretezés indítása (a fogantyún mousedown-ra)
+    BE:
+     - e: a mousedown esemény
+     - containerId: melyik konténert méretezzük
+    MEGJEGYZÉS:
+     - A 110px-es minimum-szélesség csak MOST, aktív fogantyú-húzáskor
+       kerül rá a konténerre — így önmagában a szerkesztő módba lépés
+       sosem méretez át semmit
+*/
 function startResize(e, containerId) {
     e.preventDefault();
     e.stopPropagation();
@@ -410,9 +507,6 @@ function startResize(e, containerId) {
     const container = shortcutsConfig.containers.find(c => c.id === containerId);
     startWidth = container ? container.width : 100;
 
-    // The 280px floor keeps containers readable in normal browsing; only
-    // drop it once the user actively grabs the handle to go smaller, so
-    // simply entering edit mode never resizes anything on its own.
     const containerEl = document.getElementById(containerId);
     if (containerEl) containerEl.style.minWidth = '110px';
 
@@ -422,6 +516,16 @@ function startResize(e, containerId) {
     document.body.style.userSelect = 'none';
 }
 
+/*
+    CÉL: Az egér mozgása közben a konténer szélességének élő frissítése
+    LOGIKA:
+     - Az egér elmozdulásából (deltaX) %-os szélességváltozást számol
+     - Előbb 10-100% közé szorítja (clamp), utána egy gyenge "mágneses"
+       húzást alkalmaz a gyakori törtrészek (1/4, 1/3, 1/2, stb.) felé
+       — a húzás csak a hozzájuk MÁR közeli értékeket mozdítja rájuk,
+       így az érték egyébként 1:1 arányban követi az egeret, nem
+       ugrál távoli rácspontok között
+*/
 function handleResize(e) {
     if (!isResizing || !resizingContainerId) return;
 
@@ -434,9 +538,6 @@ function handleResize(e) {
 
     let newWidth = startWidth + deltaPercent;
 
-    // Clamp first, then apply a small magnetic pull toward common fractions —
-    // the pull only nudges values already close by, so the width otherwise
-    // tracks the mouse 1:1 instead of leaping between far-apart grid points.
     newWidth = Math.max(10, Math.min(100, newWidth));
 
     const snapPoints = [25, 33.33, 50, 66.67, 75, 100];
@@ -465,6 +566,7 @@ function handleResize(e) {
     }
 }
 
+// CÉL: Átméretezés lezárása (mouseup-ra): mentés, majd a globális listenerek levétele
 function stopResize() {
     if (isResizing) {
         saveConfig();
@@ -477,26 +579,33 @@ function stopResize() {
     document.body.style.userSelect = '';
 }
 
-// Container management
+//! ---------- KONTÉNEREK KEZELÉSE ----------
+
+// CÉL: Új, üres konténer felvétele fél szélességgel
 function addNewContainer() {
     const newContainer = {
         id: generateContainerId(),
         name: 'New Container',
-        width: 50, // Start at half width
+        width: 50, // fél szélességgel induljon
         shortcuts: []
     };
-    
+
     shortcutsConfig.containers.push(newContainer);
     saveConfig();
     renderShortcuts();
 }
 
+/*
+    CÉL: Egy konténer törlése (megerősítés után), a benne lévő
+    összes shortcut-tal együtt
+     - Az utolsó konténer nem törölhető
+*/
 function deleteContainer(containerId) {
     if (shortcutsConfig.containers.length <= 1) {
         alert('Cannot delete the last container');
         return;
     }
-    
+
     if (confirm('Delete this container and all its shortcuts?')) {
         shortcutsConfig.containers = shortcutsConfig.containers.filter(c => c.id !== containerId);
         saveConfig();
@@ -504,49 +613,64 @@ function deleteContainer(containerId) {
     }
 }
 
+//! ---------- "SHORTCUT HOZZÁADÁSA" FORM ----------
+
+/*
+    CÉL: A hozzáadás-form megnyitása/zárása egy adott konténerhez
+    BE:
+     - containerId: melyik konténerhez nyíljon a form
+     - buttonEl: a rá kattintott "+" gomb (erre kerül az "active" osztály)
+    LOGIKA:
+     - Ha ugyanannak a konténernek a gombjára kattintottak, és a form
+       már nyitva van -> csak bezárja
+     - Egyébként előbb minden nyitott állapotot bezár, majd megnyitja
+       EZ a konténer számára
+*/
 function toggleAddFormForContainer(containerId, buttonEl) {
     const addForm = domElements.shortcuts.addForm;
     if (!addForm) return;
-    
-    // If clicking same container's button and form is open, close it
+
     if (isAddMode && activeContainerId === containerId) {
         closeAddForm();
         return;
     }
-    
-    // Close any existing open state first
+
     closeAddForm();
-    
-    // Open for this container
+
     activeContainerId = containerId;
     isAddMode = true;
     addForm.style.display = 'flex';
-    
-    // Rotate the + to X
-    buttonEl.classList.add('active');
-    
+
+    buttonEl.classList.add('active'); // "+" -> "×" elforgatás (CSS-ben)
+
     if (domElements.shortcuts.newName) {
         domElements.shortcuts.newName.focus();
     }
 }
 
+// CÉL: A hozzáadás-form bezárása, és minden "+" gomb visszaállítása alap állapotba
 function closeAddForm() {
     const addForm = domElements.shortcuts.addForm;
     if (addForm) {
         addForm.style.display = 'none';
     }
-    
-    // Reset all + buttons
+
     document.querySelectorAll('.add-shortcut-to-container').forEach(btn => {
         btn.classList.remove('active');
     });
-    
+
     activeContainerId = null;
     isAddMode = false;
 }
 
-// Edit-shortcut popover: opens next to the clicked icon, letting the user
-// rename it / change its URL in place instead of navigating away.
+//! ---------- SHORTCUT SZERKESZTŐ POPOVER ----------
+
+/*
+    CÉL: A szerkesztő popover létrehozása (csak első hívásra), vagy a
+    már meglévő visszaadása
+     - A kattintott ikon melletti helyen nyílik meg, helyben engedve
+       átnevezni / URL-t cserélni, elnavigálás nélkül
+*/
 function getEditPopover() {
     if (editPopoverEl) return editPopoverEl;
 
@@ -577,6 +701,13 @@ function getEditPopover() {
     return editPopoverEl;
 }
 
+/*
+    CÉL: A szerkesztő popover pozicionálása a kattintás helyéhez, a
+    képernyő szélein túllógás elkerülésével
+    BE:
+     - popover: a popover DOM eleme
+     - clickEvent: a kattintás esemény (ebből jön a kezdő pozíció)
+*/
 function positionEditPopover(popover, clickEvent) {
     const margin = 12;
     const left = clickEvent.clientX;
@@ -585,6 +716,7 @@ function positionEditPopover(popover, clickEvent) {
     popover.style.left = `${left}px`;
     popover.style.top = `${top}px`;
 
+    // Csak azután tudjuk lemérni a tényleges méretét, hogy kirajzolódott
     requestAnimationFrame(() => {
         const rect = popover.getBoundingClientRect();
         let adjustedLeft = left;
@@ -601,6 +733,12 @@ function positionEditPopover(popover, clickEvent) {
     });
 }
 
+/*
+    CÉL: A szerkesztő popover megnyitása egy adott shortcut-hoz,
+    a mezők előre feltöltésével
+    BE: shortcut, containerId, index - melyik shortcut-ot szerkesztjük
+        clickEvent - a pozicionáláshoz
+*/
 function openEditShortcutPopover(shortcut, containerId, index, clickEvent) {
     const popover = getEditPopover();
     editingShortcut = { containerId, index };
@@ -613,6 +751,7 @@ function openEditShortcutPopover(shortcut, containerId, index, clickEvent) {
     popover.querySelector('.edit-shortcut-name').focus();
 }
 
+// CÉL: A szerkesztő popover bezárása, szerkesztett shortcut jelző törlése
 function closeEditShortcutPopover() {
     if (editPopoverEl) {
         editPopoverEl.classList.remove('open');
@@ -620,6 +759,11 @@ function closeEditShortcutPopover() {
     editingShortcut = null;
 }
 
+/*
+    CÉL: A popoverben szerkesztett név/URL mentése a shortcut-ra
+     - Validálja mindkét mezőt (kötelező), a hiányzó "https://"-t pótolja
+     - Érvénytelen URL esetén hibaüzenetet ad és nem menti
+*/
 function saveEditShortcutPopover() {
     if (!editingShortcut) return;
 
@@ -653,18 +797,25 @@ function saveEditShortcutPopover() {
     renderShortcuts();
 }
 
-// Helper to save config
+//! ---------- MENTÉS / BETÖLTÉS / MIGRÁCIÓ ----------
+
+// CÉL: A shortcutsConfig kimentése localStorage-ba
 function saveConfig() {
     localStorage.setItem('shortcutsConfig', JSON.stringify(shortcutsConfig));
 }
 
-// Migration function for old config format
+/*
+    CÉL: Régi (konténer nélküli) konfigurációs formátum átalakítása
+    az új, konténeres formátumra
+    BE: oldConfig - a localStorage-ból beolvasott, nyers objektum
+    KI: mindig "containers"-t tartalmazó objektum
+*/
 function migrateOldConfig(oldConfig) {
     if (oldConfig.containers) {
-        return oldConfig; // Already new format
+        return oldConfig; // már az új formátum
     }
-    
-    // Old format: { shortcuts: [...] }
+
+    // Régi formátum: { shortcuts: [...] }
     return {
         containers: [
             {
@@ -677,13 +828,18 @@ function migrateOldConfig(oldConfig) {
     };
 }
 
+/*
+    CÉL: A shortcut-konfiguráció betöltése localStorage-ból (induláskor)
+     - Hiba/hiányzó adat esetén visszaáll az alapértelmezett konfigurációra
+     - A végén mindig kirajzol
+*/
 export function loadShortcuts() {
     const storedConfig = localStorage.getItem('shortcutsConfig');
     if (storedConfig) {
         try {
             const parsed = JSON.parse(storedConfig);
             shortcutsConfig = migrateOldConfig(parsed);
-            saveConfig(); // Save migrated config
+            saveConfig(); // migrált konfiguráció visszamentése
         } catch (error) {
             console.error('Error parsing stored shortcutsConfig:', error);
             setDefaultConfig();
@@ -694,6 +850,7 @@ export function loadShortcuts() {
     renderShortcuts();
 }
 
+// CÉL: Gyári alapértelmezett shortcut-lista beállítása és mentése
 function setDefaultConfig() {
     shortcutsConfig = {
         containers: [
@@ -715,58 +872,74 @@ function setDefaultConfig() {
     saveConfig();
 }
 
+//! ---------- SHORTCUT HOZZÁADÁSA / TÖRLÉSE ----------
+
+/*
+    CÉL: Új shortcut felvétele a "hozzáadás" form mezői alapján
+     - Validálja mindkét mezőt, pótolja a hiányzó "https://"-t
+     - A célkonténer: activeContainerId, vagy ha az nincs, az első konténer
+*/
 export function addShortcut() {
     const name = domElements.shortcuts.newName?.value.trim();
     let url = domElements.shortcuts.newUrl?.value.trim();
-    
+
     if (!name || !url) {
         alert('Please enter both a name and URL');
         return;
     }
-    
+
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://' + url;
     }
-    
+
     try {
         new URL(url);
     } catch {
         alert('Please enter a valid URL (e.g., https://example.com)');
         return;
     }
-    
-    // Find the target container or use first one
+
+    // Célkonténer megkeresése, vagy az első konténer használata
     let targetContainer = shortcutsConfig.containers.find(c => c.id === activeContainerId);
     if (!targetContainer && shortcutsConfig.containers.length > 0) {
         targetContainer = shortcutsConfig.containers[0];
     }
-    
+
     if (targetContainer) {
         targetContainer.shortcuts.push({ name, url });
         saveConfig();
     }
-    
+
     if (domElements.shortcuts.newName && domElements.shortcuts.newUrl) {
         domElements.shortcuts.newName.value = '';
         domElements.shortcuts.newUrl.value = '';
     }
-    
+
     closeAddForm();
     renderShortcuts();
 }
 
+// CÉL: Egy shortcut törlése a saját konténeréből, index alapján
 export function deleteShortcut(containerId, index) {
     const container = shortcutsConfig.containers.find(c => c.id === containerId);
     if (!container || index < 0 || index >= container.shortcuts.length) {
         console.error('Invalid delete parameters');
         return;
     }
-    
+
     container.shortcuts.splice(index, 1);
     saveConfig();
     renderShortcuts();
 }
 
+//! ---------- MÓDVÁLTÁS / BILLENTYŰZET ----------
+
+/*
+    CÉL: Szerkesztő mód be/kikapcsolása
+     - Bezárja az esetlegesen nyitott szerkesztő popovert
+     - Frissíti az Edit gomb feliratát ("Edit"/"Done"), illetve az
+       Import/Export gombok láthatóságát (csak szerkesztéskor látszanak)
+*/
 export function toggleEditMode() {
     isEditMode = !isEditMode;
     closeEditShortcutPopover();
@@ -782,17 +955,24 @@ export function toggleEditMode() {
     renderShortcuts();
 }
 
+// CÉL: Ha épp nyitva van a hozzáadás-form, bezárja
 export function toggleAddMode() {
     if (isAddMode) {
         closeAddForm();
     }
 }
 
+/*
+    CÉL: Enter/Escape kezelése a "hozzáadás" form név/URL mezőiben
+     - Ha mindkét mező ki van töltve -> Enterre hozzáadja a shortcut-ot
+     - Ha csak az egyik van kitöltve -> Enterre a másik mezőre ugrik
+     - Escape -> form bezárása
+*/
 export function handleAddShortcutKeyPress(e) {
     if (e.key === 'Enter') {
         const name = domElements.shortcuts.newName?.value.trim();
         const url = domElements.shortcuts.newUrl?.value.trim();
-        
+
         if (name && url) {
             addShortcut();
         } else if (name && !url && e.target === domElements.shortcuts.newName) {
@@ -805,7 +985,12 @@ export function handleAddShortcutKeyPress(e) {
     }
 }
 
-// Setup click outside listener
+/*
+    CÉL: Globális "kattintás/Escape kívülre" figyelők bekötése
+     - Szerkesztő popover kívülre kattintásra / Escape-re záródik
+     - "Hozzáadás" form kívülre kattintásra záródik (kivéve, ha épp
+       egy "+" gombra kattintottak, ami újranyitná)
+*/
 export function setupClickOutsideListener() {
     document.addEventListener('click', (e) => {
         if (editingShortcut && editPopoverEl && !editPopoverEl.contains(e.target)) {
@@ -817,7 +1002,7 @@ export function setupClickOutsideListener() {
         const addForm = domElements.shortcuts.addForm;
         const clickedAddBtn = e.target.closest('.add-shortcut-to-container');
 
-        // If clicked outside form and not on an add button, close
+        // Ha a form-on kívülre kattintott, és nem egy "+" gombra -> zárás
         if (addForm && !addForm.contains(e.target) && !clickedAddBtn) {
             closeAddForm();
         }
@@ -830,12 +1015,14 @@ export function setupClickOutsideListener() {
     });
 }
 
-// Export config getter for main.js
+//! ---------- KONFIGURÁCIÓ EXPORT/IMPORT (main.js számára) ----------
+
+// CÉL: A jelenlegi teljes konfiguráció visszaadása (main.js Export All-jához)
 export function getShortcutsConfig() {
     return shortcutsConfig;
 }
 
-// Import setter for main.js
+// CÉL: Konfiguráció beállítása kívülről (main.js Import All-jához), mentéssel és újrarajzolással
 export function setShortcutsConfig(config) {
     shortcutsConfig = migrateOldConfig(config);
     saveConfig();

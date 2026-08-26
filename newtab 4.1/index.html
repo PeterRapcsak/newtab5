@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!--======================================================================
+    index.html - A New Tab oldal fő HTML váza
+------------------------------------------------------------------------
+    CÉL:
+     - A statikus DOM-váz felépítése: keresősáv + részletes keresés,
+       Quick Tools ikonok, valutaváltó, Time Tools (Stopwatch/Timer/
+       Pomodoro), QR-kód widget, shortcut-ok, alsó eszköztár, page
+       controls (téma + Edit gomb)
+     - A ténylegesen dinamikus tartalmat (shortcut-ok, alsó eszköztár
+       szekciói, téma testreszabó panel, Import/Export és Edit gombok)
+       a scripts/*.js fájlok töltik fel / építik fel futásidőben - itt
+       csak a "hely" (üres konténer) van nekik lefoglalva
+    MEGJEGYZÉS:
+     - A HTML nem támogatja a JS/CSS-stílusú szekciófejléceket, ezért
+       itt egyszerű, leíró HTML-kommentek jelzik az egyes fő blokkokat,
+       illetve hogy melyik scripts/*.js fájl tölti fel/vezérli őket
+======================================================================-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -12,7 +29,7 @@
 <body>
     <div class="top-section">
         <div class="left-half">
-            <!-- Search Bar -->
+            <!-- Keresősáv (search.js) -->
             <div class="search-bar glass-card">
                 <input type="text" id="search-q" placeholder="Search the web...">
                 <button id="search-btn">Search</button>
@@ -21,7 +38,8 @@
                 </button>
             </div>
 
-            <!-- Quick Tools: compact icon triggers for panels hidden on small screens -->
+            <!-- Quick Tools: kompakt ikon-triggerek a kis képernyőn elrejtett
+                 panelekhez (quickTools.js nyitja meg popoverként) -->
             <div class="quick-tools">
                 <button type="button" class="icon-btn quick-tool-btn" id="quick-currency-btn" title="Currency converter" aria-label="Open currency converter">
                     <i class="fas fa-coins"></i>
@@ -31,7 +49,7 @@
                 </button>
             </div>
 
-            <!-- Advanced Search -->
+            <!-- Részletes keresés (search.js állítja össze a lekérdezést, quickTools.js nyitja/zárja) -->
             <div id="advanced-search" class="advanced-search glass-card">
                 <div class="advanced-grid">
                     <div class="advanced-row advanced-engine-row">
@@ -63,7 +81,7 @@
                         <input type="text" id="adv-any-words" placeholder="Any of these words">
                         <input type="text" id="adv-none-words" placeholder="None of these words">
                     </div>
-                
+
                     <div class="advanced-row">
                         <div class="file-types">
                             <div class="compact-checkboxes">
@@ -82,9 +100,9 @@
                 </div>
             </div>
 
-            <!-- Tools Row -->
+            <!-- Eszköz-sor -->
             <div class="tools-row">
-                <!-- Currency Exchanger -->
+                <!-- Valutaváltó (currency.js tölti fel a <select>-eket és számol) -->
                 <div class="currency-exchanger glass-card">
                     <form class="exchange-form">
                         <div class="currency-row">
@@ -110,7 +128,8 @@
                     </form>
                 </div>
 
-                <!-- Time Tools -->
+                <!-- Time Tools: Stopper / Visszaszámláló / Pomodoro fülek
+                     (timeTools.js vezérli a Stopwatch/Timer-t, pomodoro.js a Pomodoro fület) -->
                 <div class="time-tools glass-card">
                     <div class="mode-tabs">
                         <button class="toggle-btn active" data-target="stopwatch">Stopwatch</button>
@@ -147,17 +166,17 @@
                 </div>
             </div>
 
-            <!-- QR Code Generator -->
+            <!-- QR-kód generátor (qrWidget.js + a becsomagolt qrcode-generator.js) -->
             <div class="qr-widget glass-card" id="qr-widget">
                 <input type="text" id="qr-input" class="qr-input" placeholder="Paste text or a URL…" autocomplete="off" spellcheck="false">
                 <div class="qr-output" id="qr-output" hidden></div>
             </div>
         </div>
 
-        <!-- Right Half - Shortcuts -->
+        <!-- Jobb oldali fél - Shortcut-ok (shortcuts.js) -->
         <div class="right-half">
             <div id="shortcuts-wrapper" class="shortcuts-wrapper">
-                <!-- Containers will be dynamically added here -->
+                <!-- A konténerek ide kerülnek dinamikusan, JS-ből -->
             </div>
             <div class="add-shortcut glass-card" style="display: none;">
                 <input type="text" id="new-shortcut-name" placeholder="Name">
@@ -166,13 +185,14 @@
             </div>
         </div>
     </div>
-    
-    <!-- Bottom Section - Editable Tools Bar -->
+
+    <!-- Alsó szekció - szerkeszthető eszköztár (bottomBar.js) -->
     <div class="bottom-section">
-        <!-- Sections will be dynamically added here -->
+        <!-- A szekciók ide kerülnek dinamikusan, JS-ből -->
     </div>
 
-    <!-- Theme customizer + the single central Edit button, bottom-right -->
+    <!-- Téma testreszabó (themeCustomizer.js) + az egyetlen, központi Edit
+         gomb (main.js), jobb alul -->
     <div class="page-controls" id="page-controls"></div>
 
     <script type="module" src="scripts/main.js"></script>
