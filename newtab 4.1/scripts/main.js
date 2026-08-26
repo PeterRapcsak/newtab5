@@ -1,10 +1,13 @@
 import { domElements } from './dom.js';
 import { initializeTimeTools } from './timeTools.js';
+import { getPomodoroSettings, setPomodoroSettings } from './pomodoro.js';
 import { loadCurrencies, setupCurrencyInputs } from './currency.js';
-import { setupSearch, toggleAdvancedSearch, initializeSearchSettings } from './search.js';
+import { setupSearch, initializeSearchSettings } from './search.js';
 import { loadShortcuts, renderShortcuts, addShortcut, deleteShortcut, toggleEditMode, toggleAddMode, handleAddShortcutKeyPress, getShortcutsConfig, setShortcutsConfig, setupClickOutsideListener } from './shortcuts.js';
 import { loadBottomBarConfig, toggleBottomBarEditMode } from './bottomBar.js';
 import { initializeThemeCustomizer } from './themeCustomizer.js';
+import { initializeQuickTools } from './quickTools.js';
+import { initQrWidget } from './qrWidget.js';
 
 function init() {
     setupSearch();
@@ -16,6 +19,8 @@ function init() {
     initializeTimeTools();
     loadBottomBarConfig();
     initializeThemeCustomizer();
+    initializeQuickTools();
+    initQrWidget();
 
     if (domElements.shortcuts.addButton) {
         domElements.shortcuts.addButton.addEventListener('click', addShortcut);
@@ -49,14 +54,8 @@ function init() {
     domElements.buttons.import.style.display = 'none';
     domElements.buttons.import.addEventListener('click', importAllSettings);
 
-    domElements.buttons.edit = document.createElement('button');
-    domElements.buttons.edit.id = 'edit-btn';
-    domElements.buttons.edit.textContent = 'Edit';
-    domElements.buttons.edit.addEventListener('click', toggleEditMode);
-
     buttonContainer.appendChild(domElements.buttons.import);
     buttonContainer.appendChild(domElements.buttons.export);
-    buttonContainer.appendChild(domElements.buttons.edit);
 
     const rightHalf = document.querySelector('.right-half');
     if (rightHalf) {
@@ -64,12 +63,19 @@ function init() {
         rightHalf.insertBefore(buttonContainer, addShortcutDiv);
     }
 
-    if (domElements.search.advancedButton) {
-        domElements.search.advancedButton.addEventListener('click', toggleAdvancedSearch);
-    }
-    
-    // Bottom bar controls - only Edit Bar button
-    setupBottomBarControls();
+    // One central Edit button, in the bottom-right control cluster, drives
+    // both shortcuts edit mode and bottom-bar edit mode together — no more
+    // separate "Edit" buttons that can drift out of sync with each other.
+    domElements.buttons.edit = document.createElement('button');
+    domElements.buttons.edit.id = 'edit-btn';
+    domElements.buttons.edit.textContent = 'Edit';
+    domElements.buttons.edit.addEventListener('click', () => {
+        toggleEditMode();
+        toggleBottomBarEditMode();
+    });
+
+    const pageControls = document.getElementById('page-controls');
+    if (pageControls) pageControls.appendChild(domElements.buttons.edit);
 }
 
 function exportAllSettings() {
@@ -82,7 +88,8 @@ function exportAllSettings() {
         currencies: {
             from: localStorage.getItem('fromCurrency') || 'USD',
             to: localStorage.getItem('toCurrency') || 'EUR'
-        }
+        },
+        pomodoro: getPomodoroSettings()
     };
     
     const blob = new Blob([JSON.stringify(allSettings, null, 2)], { type: 'application/json' });
@@ -148,7 +155,12 @@ function importAllSettings() {
                         }
                         loadCurrencies();
                     }
-                    
+
+                    // Import Pomodoro focus/break lengths
+                    if (importedData.pomodoro) {
+                        setPomodoroSettings(importedData.pomodoro);
+                    }
+
                     alert('All settings imported successfully!');
                     location.reload();
                 } catch (error) {
@@ -160,24 +172,6 @@ function importAllSettings() {
         }
     };
     fileInput.click();
-}
-
-function setupBottomBarControls() {
-    const bottomSection = document.querySelector('.bottom-section');
-    if (!bottomSection) return;
-    
-    const controlsDiv = document.createElement('div');
-    controlsDiv.className = 'bottom-bar-controls';
-    
-    const editBtn = document.createElement('button');
-    editBtn.id = 'bottom-bar-edit-btn';
-    editBtn.className = 'bottom-bar-edit-btn';
-    editBtn.textContent = 'Edit Bar';
-    editBtn.addEventListener('click', toggleBottomBarEditMode);
-    
-    controlsDiv.appendChild(editBtn);
-    
-    bottomSection.insertBefore(controlsDiv, bottomSection.firstChild);
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -1,4 +1,5 @@
 import { domElements } from './dom.js';
+import { applyIcon } from './icons.js';
 
 export let bottomBarConfig = {
     sections: [
@@ -11,73 +12,6 @@ export let bottomBarConfig = {
 };
 
 export let isBottomBarEditMode = false;
-
-const BASE_ICON_URL = "https://www.gstatic.com/images/branding/product/1x/";
-
-// Enhanced Google service icons mapping
-const GOOGLE_SERVICE_ICONS = {
-    "analytics.google.com": "analytics_48dp.png",
-    "books.google.com": "books_48dp.png",
-    "calendar.google.com": "calendar_2020q4_48dp.png",
-    "classroom.google.com": "classroom_48dp.png",
-    "docs.google.com": "docs_2020q4_48dp.png",
-    "drive.google.com": "drive_2020q4_48dp.png",
-    "earth.google.com": "earth_48dp.png",
-    "finance.google.com": "finance_48dp.png",
-    "groups.google.com": "groups_48dp.png",
-    "keep.google.com": "keep_2020q4_48dp.png",
-    "mail.google.com": "gmail_2020q4_48dp.png",
-    "maps.google.com": "maps_48dp.png",
-    "meet.google.com": "meet_2020q4_48dp.png",
-    "news.google.com": "news_48dp.png",
-    "photos.google.com": "photos_48dp.png",
-    "play.google.com": "play_prism_48dp.png",
-    "podcasts.google.com": "podcasts_48dp.png",
-    "scholar.google.com": "scholar_48dp.png",
-    "sheets.google.com": "sheets_2020q4_48dp.png",
-    "slides.google.com": "slides_2020q4_48dp.png",
-    "translate.google.com": "translate_48dp.png",
-    "youtube.com": "youtube_48dp.png",
-    "www.youtube.com": "youtube_48dp.png",
-    "music.youtube.com": "youtube_music_48dp.png",
-    "studio.youtube.com": "youtube_studio_48dp.png",
-};
-
-// Special icons for common services
-const SPECIAL_ICONS = {
-    "chat.deepseek.com": "https://chat.deepseek.com/favicon.ico",
-    "deepseek.com": "https://chat.deepseek.com/favicon.ico",
-    "chat.openai.com": "https://cdn.oaistatic.com/_next/static/media/apple-touch-icon.59f2e898.png",
-    "openai.com": "https://cdn.oaistatic.com/_next/static/media/apple-touch-icon.59f2e898.png",
-    "gemini.google.com": "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg",
-    "aistudio.google.com": "https://www.gstatic.com/aistudio/ai_studio_favicon_32x32.png",
-};
-
-const FALLBACK_ICON_URL = '/icons/fallback-icon.png';
-
-function getIconUrl(url) {
-    let domain = 'unknown.domain';
-    try {
-        const urlObject = new URL(url);
-        domain = urlObject.hostname;
-    } catch (e) {
-        console.error(`Invalid URL: ${url}`, e);
-        return FALLBACK_ICON_URL;
-    }
-
-    // Check for special icons first
-    if (SPECIAL_ICONS[domain]) {
-        return SPECIAL_ICONS[domain];
-    }
-
-    // Check for Google service icons
-    if (GOOGLE_SERVICE_ICONS[domain]) {
-        return BASE_ICON_URL + GOOGLE_SERVICE_ICONS[domain];
-    }
-
-    // Use DuckDuckGo favicon service as fallback
-    return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
-}
 
 export function loadBottomBarConfig() {
     const stored = localStorage.getItem('bottomBarConfig');
@@ -190,14 +124,9 @@ function setDefaultBottomBarConfig() {
 export function renderBottomBar() {
     const bottomSection = document.querySelector('.bottom-section');
     if (!bottomSection) return;
-    
-    // Clear existing content except controls
-    const controls = bottomSection.querySelector('.bottom-bar-controls');
+
     bottomSection.innerHTML = '';
-    if (controls) {
-        bottomSection.appendChild(controls);
-    }
-    
+
     // Render each section
     bottomBarConfig.sections.forEach((section, sectionIndex) => {
         const sectionContainer = document.createElement('div');
@@ -280,6 +209,29 @@ export function renderBottomBar() {
         newSectionBtn.onclick = addNewSection;
         bottomSection.appendChild(newSectionBtn);
     }
+
+    syncBottomBarHeight(bottomSection);
+}
+
+// .page-controls sits a fixed 16px above the bottom bar, but the bottom bar's
+// real height isn't fixed — it wraps onto extra rows once a section has too
+// many tools (langTools + aiTools stacking, "New Section" button, edit mode's
+// extra add/delete buttons all change its height). A hardcoded offset drifts
+// out of sync and the two overlap. A ResizeObserver on the bar keeps a CSS
+// var pinned to its true rendered height, so .page-controls can position
+// itself off of that instead of a guess — observed once, on the .bottom-section
+// node itself, which innerHTML rebuilds don't replace.
+let bottomBarResizeObserver = null;
+
+function syncBottomBarHeight(bottomSection) {
+    document.documentElement.style.setProperty('--bottom-bar-actual-height', `${bottomSection.offsetHeight}px`);
+
+    if (!bottomBarResizeObserver) {
+        bottomBarResizeObserver = new ResizeObserver(([entry]) => {
+            document.documentElement.style.setProperty('--bottom-bar-actual-height', `${entry.target.offsetHeight}px`);
+        });
+        bottomBarResizeObserver.observe(bottomSection);
+    }
 }
 
 function getDragAfterElement(container, x) {
@@ -304,18 +256,10 @@ function createToolElement(tool, sectionIndex, itemIndex) {
     toolEl.style.position = 'relative';
     toolEl.dataset.itemIndex = itemIndex;
     
-    const iconSrc = getIconUrl(tool.url);
-    
     const imgElement = document.createElement('img');
     imgElement.alt = tool.name;
-    imgElement.src = iconSrc;
-    imgElement.onerror = function() {
-        if (this.src !== FALLBACK_ICON_URL) {
-            this.onerror = null;
-            this.src = FALLBACK_ICON_URL;
-        }
-    };
-    
+    applyIcon(imgElement, tool.url, tool.name);
+
     const nameSpan = document.createElement('span');
     nameSpan.textContent = tool.name;
     
@@ -472,15 +416,13 @@ function deleteSection(sectionIndex) {
     }
 }
 
+// Text/active state for the toggle now lives on the one central edit
+// button (see main.js), which drives this function alongside
+// shortcuts.js's toggleEditMode() — this only needs to flip the flag and
+// re-render.
 export function toggleBottomBarEditMode() {
     isBottomBarEditMode = !isBottomBarEditMode;
     renderBottomBar();
-    
-    const editBtn = document.getElementById('bottom-bar-edit-btn');
-    if (editBtn) {
-        editBtn.textContent = isBottomBarEditMode ? 'Done' : 'Edit Bar';
-        editBtn.classList.toggle('active', isBottomBarEditMode);
-    }
 }
 
 export function exportBottomBarConfig() {

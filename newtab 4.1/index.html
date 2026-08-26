@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Tab</title>
     <link rel="icon" href="favicon/home16.png" type="image/png">
+    <link rel="shortcut icon" href="favicon.ico">
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -14,24 +15,45 @@
             <!-- Search Bar -->
             <div class="search-bar glass-card">
                 <input type="text" id="search-q" placeholder="Search the web...">
-                <select id="search-engine-select" class="compact-select">
-                    <option value="google">Google</option>
-                    <option value="bing">Bing</option>
-                    <option value="duckduckgo">DuckDuckGo</option>
-                    <option value="brave">Brave</option>
-                    <option value="yandex">Yandex</option>
-                    <option value="startpage">Startpage</option>
-                    <option value="baidu">Baidu</option>
-                </select>
                 <button id="search-btn">Search</button>
-                <div class="search-controls">
-                    <button id="advanced-btn">Advanced</button>
-                </div>
+                <button type="button" id="advanced-btn" class="icon-btn" title="Advanced search" aria-label="Toggle advanced search">
+                    <i class="fas fa-sliders"></i>
+                </button>
             </div>
-            
+
+            <!-- Quick Tools: compact icon triggers for panels hidden on small screens -->
+            <div class="quick-tools">
+                <button type="button" class="icon-btn quick-tool-btn" id="quick-currency-btn" title="Currency converter" aria-label="Open currency converter">
+                    <i class="fas fa-coins"></i>
+                </button>
+                <button type="button" class="icon-btn quick-tool-btn" id="quick-time-btn" title="Stopwatch & timer" aria-label="Open stopwatch and timer">
+                    <i class="fas fa-stopwatch"></i>
+                </button>
+            </div>
+
             <!-- Advanced Search -->
-            <div id="advanced-search" class="advanced-search glass-card" style="display: none;">
+            <div id="advanced-search" class="advanced-search glass-card">
                 <div class="advanced-grid">
+                    <div class="advanced-row advanced-engine-row">
+                        <select id="search-engine-select" class="compact-select">
+                            <option value="google">Google</option>
+                            <option value="bing">Bing</option>
+                            <option value="duckduckgo">DuckDuckGo</option>
+                            <option value="brave">Brave</option>
+                            <option value="yandex">Yandex</option>
+                            <option value="startpage">Startpage</option>
+                            <option value="baidu">Baidu</option>
+                        </select>
+
+                        <select id="adv-date-range" class="compact-select">
+                            <option value="">Any date</option>
+                            <option value="d">Last 24h</option>
+                            <option value="w">Last week</option>
+                            <option value="m">Last month</option>
+                            <option value="y">Last year</option>
+                        </select>
+                    </div>
+
                     <div class="advanced-group">
                         <input type="text" id="adv-all-words" placeholder="All these words">
                         <input type="text" id="adv-exact-phrase" placeholder="Exact phrase">
@@ -56,14 +78,6 @@
                                 <label><input type="checkbox" value="html">HTML</label>
                             </div>
                         </div>
-
-                        <select id="adv-date-range" class="compact-select">
-                            <option value="">Any date</option>
-                            <option value="d">Last 24h</option>
-                            <option value="w">Last week</option>
-                            <option value="m">Last month</option>
-                            <option value="y">Last year</option>
-                        </select>
                     </div>
                 </div>
             </div>
@@ -98,25 +112,45 @@
 
                 <!-- Time Tools -->
                 <div class="time-tools glass-card">
-                    <div class="controls">
+                    <div class="mode-tabs">
                         <button class="toggle-btn active" data-target="stopwatch">Stopwatch</button>
                         <button class="toggle-btn" data-target="timer">Timer</button>
-                        <button class="start-stop"><i class="fas fa-play"></i></button>
-                        <button class="reset"><i class="fas fa-redo"></i></button>
+                        <button class="toggle-btn" data-target="pomodoro">Pomodoro</button>
                     </div>
                     <div class="time-tool-content">
                         <div class="stopwatch active">
                             <div class="display">0.00</div>
                         </div>
                         <div class="timer">
-                            <div class="display" contenteditable="true">
-                                <span class="digit hours" contenteditable="true">00</span>:
-                                <span class="digit minutes" contenteditable="true">00</span>:
-                                <span class="digit seconds" contenteditable="true">00</span>
+                            <div class="display" tabindex="0">
+                                <span class="digit hours">00</span><span class="time-segment">:</span><span class="digit minutes">00</span><span class="time-segment">:</span><span class="digit seconds">00</span>
                             </div>
+                            <div class="time-progress"><div class="time-progress-fill" id="timer-progress-fill"></div></div>
+                        </div>
+                        <div class="pomodoro-panel">
+                            <div class="display">
+                                <span id="pomodoro-time">25:00</span>
+                                <div class="pomodoro-header">
+                                    <span class="pomodoro-phase" id="pomodoro-phase">FOCUS</span>
+                                    <button type="button" class="icon-btn pomodoro-settings-btn" id="pomodoro-settings-btn" title="Pomodoro settings" aria-label="Pomodoro settings">
+                                        <i class="fas fa-gear"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="time-progress"><div class="time-progress-fill" id="pomodoro-progress-fill"></div></div>
                         </div>
                     </div>
+                    <div class="controls">
+                        <button class="start-stop"><i class="fas fa-play"></i><span>Start</span></button>
+                        <button class="reset"><i class="fas fa-redo"></i></button>
+                    </div>
                 </div>
+            </div>
+
+            <!-- QR Code Generator -->
+            <div class="qr-widget glass-card" id="qr-widget">
+                <input type="text" id="qr-input" class="qr-input" placeholder="Paste text or a URL…" autocomplete="off" spellcheck="false">
+                <div class="qr-output" id="qr-output" hidden></div>
             </div>
         </div>
 
@@ -137,6 +171,9 @@
     <div class="bottom-section">
         <!-- Sections will be dynamically added here -->
     </div>
+
+    <!-- Theme customizer + the single central Edit button, bottom-right -->
+    <div class="page-controls" id="page-controls"></div>
 
     <script type="module" src="scripts/main.js"></script>
 </body>

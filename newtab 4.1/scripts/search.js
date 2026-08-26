@@ -32,7 +32,7 @@ export function setupSearch() {
         let query = mainQuery;
         let params = '';
         
-        if (domElements.advancedSearch && domElements.advancedSearch.style.display !== 'none') {
+        if (domElements.advancedSearch && domElements.advancedSearch.classList.contains('popover-panel')) {
             const allWords = document.getElementById('adv-all-words').value.trim();
             const exactPhrase = document.getElementById('adv-exact-phrase').value.trim();
             const anyWords = document.getElementById('adv-any-words').value.trim();
@@ -71,17 +71,8 @@ export function setupSearch() {
             if (e.key === 'Enter') performSearch();
         });
     }
-    if (domElements.search.advancedButton) {
-        domElements.search.advancedButton.addEventListener('click', toggleAdvancedSearch);
-    }
-}
-
-export function toggleAdvancedSearch() {
-    if (domElements.advancedSearch) {
-        const isVisible = domElements.advancedSearch.style.display !== 'none';
-        domElements.advancedSearch.style.display = isVisible ? 'none' : 'block';
-        domElements.search.advancedButton.textContent = isVisible ? 'Advanced' : 'Hide Advanced';
-    }
+    // #advanced-btn's click is wired in quickTools.js — it always opens
+    // advanced search as an icon-anchored popover, at every screen size.
 }
 
 const lensBtn = document.getElementById('lens-btn');

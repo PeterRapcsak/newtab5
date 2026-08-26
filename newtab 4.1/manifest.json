@@ -11,6 +11,10 @@
 	    "https://*.wikipedia.org/w/api.php?action=opensearch&search=*",
 	    "https://api.frankfurter.app/*"
 	],
+	"optional_host_permissions": [
+	    "http://*/*",
+	    "https://*/*"
+	],
 	"web_accessible_resources": [
     {
       "resources": ["icons/fallback-icon.png"],

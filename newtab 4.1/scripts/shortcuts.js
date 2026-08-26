@@ -1,4 +1,5 @@
 import { domElements } from './dom.js';
+import { applyIcon } from './icons.js';
 
 // New data structure supporting multiple containers
 export let shortcutsConfig = { 
@@ -15,10 +16,13 @@ export let shortcutsConfig = {
 export let isEditMode = false;
 export let isAddMode = false;
 export let activeContainerId = null; // Which container we're adding to
-let dragStartIndex = null;
-let dragSourceContainerId = null;
+let draggingShortcut = null; // the .shortcut element currently being dragged
+let dropWasHandled = false;
 let dragGhost = null;
-let dropPreview = null;
+
+// Container reordering (same live-preview mechanic as shortcut drag & drop)
+let draggingContainer = null;
+let containerDropWasHandled = false;
 
 // Resize state
 let isResizing = false;
@@ -26,46 +30,9 @@ let resizingContainerId = null;
 let startX = 0;
 let startWidth = 0;
 
-const BASE_ICON_URL = "https://www.gstatic.com/images/branding/product/1x/";
-
-const GOOGLE_SERVICE_ICONS = {
-    "analytics.google.com": "analytics_48dp.png",
-    "books.google.com": "books_48dp.png",
-    "calendar.google.com": "calendar_2020q4_48dp.png",
-    "classroom.google.com": "classroom_48dp.png",
-    "docs.google.com": "docs_2020q4_48dp.png",
-    "drive.google.com": "drive_2020q4_48dp.png",
-    "earth.google.com": "earth_48dp.png",
-    "finance.google.com": "finance_48dp.png",
-    "groups.google.com": "groups_48dp.png",
-    "keep.google.com": "keep_2020q4_48dp.png",
-    "mail.google.com": "gmail_2020q4_48dp.png",
-    "maps.google.com": "maps_48dp.png",
-    "meet.google.com": "meet_2020q4_48dp.png",
-    "news.google.com": "news_48dp.png",
-    "photos.google.com": "photos_48dp.png",
-    "play.google.com": "play_prism_48dp.png",
-    "podcasts.google.com": "podcasts_48dp.png",
-    "scholar.google.com": "scholar_48dp.png",
-    "sheets.google.com": "sheets_2020q4_48dp.png",
-    "slides.google.com": "slides_2020q4_48dp.png",
-    "translate.google.com": "translate_48dp.png",
-    "youtube.com": "youtube_48dp.png",
-    "www.youtube.com": "youtube_48dp.png",
-    "music.youtube.com": "youtube_music_48dp.png",
-    "studio.youtube.com": "youtube_studio_48dp.png",
-};
-
-const SPECIAL_ICONS = {
-    "chat.deepseek.com": "https://chat.deepseek.com/favicon.ico",
-    "deepseek.com": "https://chat.deepseek.com/favicon.ico",
-    "chat.openai.com": "https://cdn.oaistatic.com/_next/static/media/apple-touch-icon.59f2e898.png",
-    "openai.com": "https://cdn.oaistatic.com/_next/static/media/apple-touch-icon.59f2e898.png",
-    "gemini.google.com": "https://www.gstatic.com/lamda/images/gemini_sparkle_v002_d4735304ff6292a690345.svg",
-    "aistudio.google.com": "https://www.gstatic.com/aistudio/ai_studio_favicon_32x32.png",
-};
-
-const FALLBACK_ICON_URL = '/icons/fallback-icon.png';
+// Edit-shortcut popover state
+let editPopoverEl = null;
+let editingShortcut = null; // { containerId, index }
 
 export function handleShortcutClick(event) {
     if (event.button === 1 || event.ctrlKey || event.metaKey) {
@@ -74,27 +41,6 @@ export function handleShortcutClick(event) {
     event.preventDefault();
     window.location.href = event.currentTarget.href;
     return false;
-}
-
-function getIconUrl(url) {
-    let domain = 'unknown.domain';
-    try {
-        const urlObject = new URL(url);
-        domain = urlObject.hostname;
-    } catch (e) {
-        console.error(`Invalid URL: ${url}`, e);
-        return FALLBACK_ICON_URL;
-    }
-
-    if (SPECIAL_ICONS[domain]) {
-        return SPECIAL_ICONS[domain];
-    }
-
-    if (GOOGLE_SERVICE_ICONS[domain]) {
-        return BASE_ICON_URL + GOOGLE_SERVICE_ICONS[domain];
-    }
-
-    return `https://icons.duckduckgo.com/ip3/${domain}.ico`;
 }
 
 function generateContainerId() {
@@ -116,36 +62,40 @@ export function renderShortcuts() {
         containerEl.className = `shortcuts-container glass-card ${isEditMode ? 'editable' : ''}`;
         containerEl.id = container.id;
         containerEl.style.setProperty('--container-width', container.width + '%');
+        containerEl.style.setProperty('--container-grow', container.width);
         containerEl.dataset.containerId = container.id;
-        
+        containerEl.draggable = isEditMode;
+
         // Container controls wrapper (bottom right)
         const controlsWrapper = document.createElement('div');
         controlsWrapper.className = 'container-controls';
-        
+
         // Delete container button (only if more than 1 container and in edit mode)
         if (isEditMode && shortcutsConfig.containers.length > 1) {
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'delete-container-btn';
+            deleteBtn.draggable = false;
             deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
             deleteBtn.title = 'Delete container';
             deleteBtn.addEventListener('click', () => deleteContainer(container.id));
             controlsWrapper.appendChild(deleteBtn);
         }
-        
+
         // Shortcuts grid
         const shortcutsGrid = document.createElement('div');
         shortcutsGrid.className = 'shortcuts-grid';
-        
+
         container.shortcuts.forEach((shortcut, index) => {
             const shortcutEl = createShortcutElement(shortcut, index, container.id);
             shortcutsGrid.appendChild(shortcutEl);
         });
-        
+
         containerEl.appendChild(shortcutsGrid);
-        
+
         // Add shortcut button
         const addBtn = document.createElement('button');
         addBtn.className = 'add-shortcut-to-container';
+        addBtn.draggable = false;
         addBtn.innerHTML = '<i class="fas fa-plus"></i>';
         addBtn.title = 'Add shortcut';
         addBtn.dataset.containerId = container.id;
@@ -155,22 +105,23 @@ export function renderShortcuts() {
         });
         controlsWrapper.appendChild(addBtn);
         containerEl.appendChild(controlsWrapper);
-        
+
         // Resize handle (only in edit mode)
         if (isEditMode) {
             const resizeHandle = document.createElement('div');
             resizeHandle.className = 'resize-handle';
+            resizeHandle.draggable = false;
             resizeHandle.innerHTML = '<i class="fas fa-grip-lines-vertical"></i>';
             resizeHandle.addEventListener('mousedown', (e) => startResize(e, container.id));
             containerEl.appendChild(resizeHandle);
         }
-        
+
         wrapper.appendChild(containerEl);
-        
+
         // Setup drag and drop for shortcuts within this container
-        setupShortcutDragDrop(containerEl, container.id);
+        setupShortcutDragDrop(containerEl);
     });
-    
+
     // Add "Add Container" button at the end (only in edit mode)
     if (isEditMode) {
         const addContainerBtn = document.createElement('button');
@@ -178,6 +129,10 @@ export function renderShortcuts() {
         addContainerBtn.innerHTML = '<i class="fas fa-plus"></i><span>Add Container</span>';
         addContainerBtn.addEventListener('click', addNewContainer);
         wrapper.appendChild(addContainerBtn);
+
+        // Container reordering — same live-preview drag mechanic as shortcuts,
+        // only wired up while editing.
+        setupContainerDragDrop(wrapper);
     }
 }
 
@@ -187,21 +142,14 @@ function createShortcutElement(shortcut, index, containerId) {
     shortcutEl.setAttribute('draggable', 'true');
     shortcutEl.dataset.index = index.toString();
     shortcutEl.dataset.containerId = containerId;
-    
-    const iconSrc = getIconUrl(shortcut.url);
-    
+    shortcutEl.__shortcut = shortcut; // stable reference back to the data object, survives live drag reordering
+
     const linkElement = document.createElement('a');
     linkElement.href = shortcut.url;
-    
+
     const imgElement = document.createElement('img');
     imgElement.alt = shortcut.name;
-    imgElement.src = iconSrc;
-    imgElement.onerror = function() {
-        if (this.src !== FALLBACK_ICON_URL) {
-            this.onerror = null;
-            this.src = FALLBACK_ICON_URL;
-        }
-    };
+    applyIcon(imgElement, shortcut.url, shortcut.name);
     linkElement.appendChild(imgElement);
     
     const nameSpan = document.createElement('span');
@@ -212,6 +160,12 @@ function createShortcutElement(shortcut, index, containerId) {
     shortcutEl.appendChild(nameSpan);
     
     if (isEditMode) {
+        linkElement.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openEditShortcutPopover(shortcut, containerId, index, e);
+        });
+
         const deleteButton = document.createElement('button');
         deleteButton.className = 'delete-shortcut-btn';
         deleteButton.textContent = '×';
@@ -221,125 +175,209 @@ function createShortcutElement(shortcut, index, containerId) {
         });
         shortcutEl.appendChild(deleteButton);
     }
-    
+
     return shortcutEl;
 }
 
-function setupShortcutDragDrop(containerEl, containerId) {
-    const shortcutEls = containerEl.querySelectorAll('.shortcut');
+// Live-preview drag & drop: as the dragged tile passes over another tile (or
+// empty grid space), it is actually moved in the DOM right then, so the grid
+// always shows exactly what dropping right now would produce. The underlying
+// config is only rebuilt (from the live DOM order) once the drop completes;
+// a cancelled drag just re-renders from the untouched saved config instead.
+function setupShortcutDragDrop(containerEl) {
     const shortcutsGrid = containerEl.querySelector('.shortcuts-grid');
-    
-    shortcutEls.forEach((shortcutEl, itemIndex) => {
+
+    containerEl.querySelectorAll('.shortcut').forEach((shortcutEl) => {
         shortcutEl.addEventListener('dragstart', (e) => {
-            dragStartIndex = itemIndex;
-            dragSourceContainerId = containerId;
+            draggingShortcut = shortcutEl;
+            dropWasHandled = false;
             shortcutEl.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', JSON.stringify({ index: itemIndex, containerId }));
-            
+            e.dataTransfer.setData('text/plain', shortcutEl.__shortcut?.name || '');
+
             createDragGhost(shortcutEl);
-            
+
             const emptyImg = new Image();
             emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
             e.dataTransfer.setDragImage(emptyImg, 0, 0);
         });
-        
+
         shortcutEl.addEventListener('drag', (e) => {
             if (dragGhost && e.pageX > 0) {
                 dragGhost.style.left = e.pageX + 10 + 'px';
                 dragGhost.style.top = e.pageY + 10 + 'px';
             }
         });
-        
+
         shortcutEl.addEventListener('dragend', () => {
             shortcutEl.classList.remove('dragging');
             removeDragGhost();
-            removeDropPreview();
-            dragStartIndex = null;
-            dragSourceContainerId = null;
-            
             document.querySelectorAll('.shortcuts-container').forEach(c => {
                 c.classList.remove('drag-over');
             });
+
+            if (!dropWasHandled) {
+                // Dropped outside any valid target — snap the live preview back.
+                renderShortcuts();
+            }
+            draggingShortcut = null;
         });
-        
+
         shortcutEl.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
+
+            if (!draggingShortcut || draggingShortcut === shortcutEl) return;
+
+            const box = shortcutEl.getBoundingClientRect();
+            const isAfter = e.clientX - box.left > box.width / 2;
+            const target = isAfter ? shortcutEl.nextSibling : shortcutEl;
+
+            if (target !== draggingShortcut && draggingShortcut.nextSibling !== target) {
+                shortcutEl.parentNode.insertBefore(draggingShortcut, target);
+            }
         });
-        
+
         shortcutEl.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
-            const targetIndex = parseInt(shortcutEl.dataset.index);
-            const targetContainerId = shortcutEl.dataset.containerId;
-            
-            if (dragSourceContainerId && dragStartIndex !== null) {
-                moveShortcut(dragSourceContainerId, dragStartIndex, targetContainerId, targetIndex);
-            }
-            
-            removeDragGhost();
-            removeDropPreview();
-            dragStartIndex = null;
-            dragSourceContainerId = null;
+            finalizeShortcutDrop();
         });
     });
-    
-    // Allow dropping on the container itself (for moving to empty containers or end)
+
+    // Dropping on empty space (empty container, or past the last shortcut)
     shortcutsGrid.addEventListener('dragover', (e) => {
         e.preventDefault();
         containerEl.classList.add('drag-over');
+
+        if (draggingShortcut && e.target === shortcutsGrid && shortcutsGrid.lastElementChild !== draggingShortcut) {
+            shortcutsGrid.appendChild(draggingShortcut);
+        }
     });
-    
+
     shortcutsGrid.addEventListener('dragleave', (e) => {
         if (!shortcutsGrid.contains(e.relatedTarget)) {
             containerEl.classList.remove('drag-over');
         }
     });
-    
+
     shortcutsGrid.addEventListener('drop', (e) => {
         e.preventDefault();
         containerEl.classList.remove('drag-over');
-        
-        // Only handle if dropped on the grid background, not on a shortcut
-        if (e.target === shortcutsGrid || e.target.classList.contains('shortcuts-grid')) {
-            const targetContainerId = containerId;
-            const container = shortcutsConfig.containers.find(c => c.id === targetContainerId);
-            
-            if (dragSourceContainerId && dragStartIndex !== null && container) {
-                moveShortcut(dragSourceContainerId, dragStartIndex, targetContainerId, container.shortcuts.length);
-            }
-        }
-        
-        removeDragGhost();
-        removeDropPreview();
-        dragStartIndex = null;
-        dragSourceContainerId = null;
+        finalizeShortcutDrop();
     });
 }
 
-function moveShortcut(fromContainerId, fromIndex, toContainerId, toIndex) {
-    const fromContainer = shortcutsConfig.containers.find(c => c.id === fromContainerId);
-    const toContainer = shortcutsConfig.containers.find(c => c.id === toContainerId);
-    
-    if (!fromContainer || !toContainer) return;
-    
-    const [movedShortcut] = fromContainer.shortcuts.splice(fromIndex, 1);
-    
-    // Adjust toIndex if moving within same container and removing from before target
-    if (fromContainerId === toContainerId && fromIndex < toIndex) {
-        toIndex--;
-    }
-    
-    toContainer.shortcuts.splice(toIndex, 0, movedShortcut);
+function finalizeShortcutDrop() {
+    if (!draggingShortcut) return;
+    dropWasHandled = true;
+    removeDragGhost();
+
+    // The DOM order is already the live preview the user was looking at —
+    // just read it back into the data model, per container.
+    shortcutsConfig.containers.forEach(container => {
+        const containerEl = document.getElementById(container.id);
+        if (!containerEl) return;
+        container.shortcuts = Array.from(containerEl.querySelectorAll('.shortcut'))
+            .map(el => el.__shortcut)
+            .filter(Boolean);
+    });
+
+    saveConfig();
+    renderShortcuts();
+}
+
+// Container reordering — same live-preview mechanic as shortcut drag & drop:
+// the dragged card is actually moved in the DOM as it passes over a sibling,
+// so the wrapper always shows exactly what dropping right now would produce.
+function setupContainerDragDrop(wrapper) {
+    wrapper.querySelectorAll(':scope > .shortcuts-container').forEach((containerEl) => {
+        containerEl.addEventListener('dragstart', (e) => {
+            // Ignore drags that bubbled up from a shortcut/control inside —
+            // only a drag that started on the card itself reorders containers.
+            if (e.target !== containerEl) return;
+
+            draggingContainer = containerEl;
+            containerDropWasHandled = false;
+            containerEl.classList.add('dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', containerEl.dataset.containerId || '');
+
+            createDragGhost(containerEl);
+
+            const emptyImg = new Image();
+            emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            e.dataTransfer.setDragImage(emptyImg, 0, 0);
+        });
+
+        containerEl.addEventListener('drag', (e) => {
+            if (dragGhost && e.pageX > 0) {
+                dragGhost.style.left = e.pageX + 10 + 'px';
+                dragGhost.style.top = e.pageY + 10 + 'px';
+            }
+        });
+
+        containerEl.addEventListener('dragend', () => {
+            containerEl.classList.remove('dragging');
+            removeDragGhost();
+
+            if (!containerDropWasHandled) {
+                // Dropped outside any valid target — snap the live preview back.
+                renderShortcuts();
+            }
+            draggingContainer = null;
+        });
+
+        containerEl.addEventListener('dragover', (e) => {
+            if (!draggingContainer) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            if (draggingContainer === containerEl) return;
+
+            const box = containerEl.getBoundingClientRect();
+            const isAfter = e.clientX - box.left > box.width / 2;
+            const target = isAfter ? containerEl.nextSibling : containerEl;
+
+            if (target !== draggingContainer && draggingContainer.nextSibling !== target) {
+                wrapper.insertBefore(draggingContainer, target);
+            }
+        });
+
+        containerEl.addEventListener('drop', (e) => {
+            if (!draggingContainer) return;
+            e.preventDefault();
+            e.stopPropagation();
+            finalizeContainerDrop(wrapper);
+        });
+    });
+
+    wrapper.addEventListener('drop', (e) => {
+        if (!draggingContainer) return;
+        e.preventDefault();
+        finalizeContainerDrop(wrapper);
+    });
+}
+
+function finalizeContainerDrop(wrapper) {
+    if (!draggingContainer) return;
+    containerDropWasHandled = true;
+    removeDragGhost();
+
+    // The DOM order is already the live preview the user was looking at —
+    // just read it back into the data model.
+    const orderedIds = Array.from(wrapper.querySelectorAll(':scope > .shortcuts-container'))
+        .map(el => el.dataset.containerId);
+
+    shortcutsConfig.containers.sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id));
+
     saveConfig();
     renderShortcuts();
 }
 
 function createDragGhost(element) {
     removeDragGhost();
-    
+
     dragGhost = element.cloneNode(true);
     dragGhost.style.position = 'fixed';
     dragGhost.style.pointerEvents = 'none';
@@ -347,10 +385,10 @@ function createDragGhost(element) {
     dragGhost.style.opacity = '0.6';
     dragGhost.style.transform = 'scale(0.9)';
     dragGhost.style.transition = 'none';
-    
-    const deleteBtn = dragGhost.querySelector('.delete-shortcut-btn');
-    if (deleteBtn) deleteBtn.remove();
-    
+
+    dragGhost.querySelectorAll('.delete-shortcut-btn, .delete-container-btn, .add-shortcut-to-container, .resize-handle')
+        .forEach(el => el.remove());
+
     document.body.appendChild(dragGhost);
 }
 
@@ -361,23 +399,23 @@ function removeDragGhost() {
     }
 }
 
-function removeDropPreview() {
-    if (dropPreview) {
-        dropPreview.remove();
-        dropPreview = null;
-    }
-}
-
 // Resize functionality
 function startResize(e, containerId) {
     e.preventDefault();
+    e.stopPropagation();
     isResizing = true;
     resizingContainerId = containerId;
     startX = e.clientX;
-    
+
     const container = shortcutsConfig.containers.find(c => c.id === containerId);
     startWidth = container ? container.width : 100;
-    
+
+    // The 280px floor keeps containers readable in normal browsing; only
+    // drop it once the user actively grabs the handle to go smaller, so
+    // simply entering edit mode never resizes anything on its own.
+    const containerEl = document.getElementById(containerId);
+    if (containerEl) containerEl.style.minWidth = '110px';
+
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
     document.body.style.cursor = 'col-resize';
@@ -386,36 +424,43 @@ function startResize(e, containerId) {
 
 function handleResize(e) {
     if (!isResizing || !resizingContainerId) return;
-    
+
     const wrapper = document.getElementById('shortcuts-wrapper');
     if (!wrapper) return;
-    
+
     const wrapperRect = wrapper.getBoundingClientRect();
     const deltaX = e.clientX - startX;
     const deltaPercent = (deltaX / wrapperRect.width) * 100;
-    
+
     let newWidth = startWidth + deltaPercent;
-    
-    // Snap to grid: 25%, 33%, 50%, 66%, 75%, 100%
-    const snapPoints = [25, 33, 50, 66, 75, 100];
-    const snapThreshold = 5;
-    
+
+    // Clamp first, then apply a small magnetic pull toward common fractions —
+    // the pull only nudges values already close by, so the width otherwise
+    // tracks the mouse 1:1 instead of leaping between far-apart grid points.
+    newWidth = Math.max(10, Math.min(100, newWidth));
+
+    const snapPoints = [25, 33.33, 50, 66.67, 75, 100];
+    const snapThreshold = 1.5;
+    let closest = null;
+    let closestDist = Infinity;
     for (const snap of snapPoints) {
-        if (Math.abs(newWidth - snap) < snapThreshold) {
-            newWidth = snap;
-            break;
+        const dist = Math.abs(newWidth - snap);
+        if (dist < closestDist) {
+            closest = snap;
+            closestDist = dist;
         }
     }
-    
-    // Clamp between 25% and 100%
-    newWidth = Math.max(25, Math.min(100, newWidth));
-    
+    if (closest !== null && closestDist < snapThreshold) {
+        newWidth = closest;
+    }
+
     const container = shortcutsConfig.containers.find(c => c.id === resizingContainerId);
     if (container) {
         container.width = Math.round(newWidth);
         const containerEl = document.getElementById(resizingContainerId);
         if (containerEl) {
             containerEl.style.setProperty('--container-width', container.width + '%');
+            containerEl.style.setProperty('--container-grow', container.width);
         }
     }
 }
@@ -498,6 +543,114 @@ function closeAddForm() {
     
     activeContainerId = null;
     isAddMode = false;
+}
+
+// Edit-shortcut popover: opens next to the clicked icon, letting the user
+// rename it / change its URL in place instead of navigating away.
+function getEditPopover() {
+    if (editPopoverEl) return editPopoverEl;
+
+    editPopoverEl = document.createElement('div');
+    editPopoverEl.className = 'edit-shortcut-popover glass-card';
+    editPopoverEl.innerHTML = `
+        <input type="text" class="edit-shortcut-name" placeholder="New name">
+        <input type="text" class="edit-shortcut-url" placeholder="New address">
+        <div class="edit-shortcut-actions">
+            <button type="button" class="edit-shortcut-cancel action-btn">Cancel</button>
+            <button type="button" class="edit-shortcut-save">Save</button>
+        </div>
+    `;
+    document.body.appendChild(editPopoverEl);
+
+    editPopoverEl.addEventListener('click', (e) => e.stopPropagation());
+    editPopoverEl.querySelector('.edit-shortcut-save').addEventListener('click', saveEditShortcutPopover);
+    editPopoverEl.querySelector('.edit-shortcut-cancel').addEventListener('click', closeEditShortcutPopover);
+    editPopoverEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveEditShortcutPopover();
+        } else if (e.key === 'Escape') {
+            closeEditShortcutPopover();
+        }
+    });
+
+    return editPopoverEl;
+}
+
+function positionEditPopover(popover, clickEvent) {
+    const margin = 12;
+    const left = clickEvent.clientX;
+    const top = clickEvent.clientY;
+
+    popover.style.left = `${left}px`;
+    popover.style.top = `${top}px`;
+
+    requestAnimationFrame(() => {
+        const rect = popover.getBoundingClientRect();
+        let adjustedLeft = left;
+        let adjustedTop = top;
+
+        const overflowRight = rect.right - (window.innerWidth - margin);
+        if (overflowRight > 0) adjustedLeft -= overflowRight;
+
+        const overflowBottom = rect.bottom - (window.innerHeight - margin);
+        if (overflowBottom > 0) adjustedTop -= overflowBottom;
+
+        popover.style.left = `${Math.max(margin, adjustedLeft)}px`;
+        popover.style.top = `${Math.max(margin, adjustedTop)}px`;
+    });
+}
+
+function openEditShortcutPopover(shortcut, containerId, index, clickEvent) {
+    const popover = getEditPopover();
+    editingShortcut = { containerId, index };
+
+    popover.querySelector('.edit-shortcut-name').value = shortcut.name;
+    popover.querySelector('.edit-shortcut-url').value = shortcut.url;
+
+    popover.classList.add('open');
+    positionEditPopover(popover, clickEvent);
+    popover.querySelector('.edit-shortcut-name').focus();
+}
+
+function closeEditShortcutPopover() {
+    if (editPopoverEl) {
+        editPopoverEl.classList.remove('open');
+    }
+    editingShortcut = null;
+}
+
+function saveEditShortcutPopover() {
+    if (!editingShortcut) return;
+
+    const popover = getEditPopover();
+    const name = popover.querySelector('.edit-shortcut-name').value.trim();
+    let url = popover.querySelector('.edit-shortcut-url').value.trim();
+
+    if (!name || !url) {
+        alert('Please enter both a name and URL');
+        return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+
+    try {
+        new URL(url);
+    } catch {
+        alert('Please enter a valid URL (e.g., https://example.com)');
+        return;
+    }
+
+    const container = shortcutsConfig.containers.find(c => c.id === editingShortcut.containerId);
+    if (container && container.shortcuts[editingShortcut.index]) {
+        container.shortcuts[editingShortcut.index] = { name, url };
+        saveConfig();
+    }
+
+    closeEditShortcutPopover();
+    renderShortcuts();
 }
 
 // Helper to save config
@@ -616,6 +769,7 @@ export function deleteShortcut(containerId, index) {
 
 export function toggleEditMode() {
     isEditMode = !isEditMode;
+    closeEditShortcutPopover();
     if (domElements.buttons.edit) {
         domElements.buttons.edit.textContent = isEditMode ? 'Done' : 'Edit';
     }
@@ -654,14 +808,24 @@ export function handleAddShortcutKeyPress(e) {
 // Setup click outside listener
 export function setupClickOutsideListener() {
     document.addEventListener('click', (e) => {
+        if (editingShortcut && editPopoverEl && !editPopoverEl.contains(e.target)) {
+            closeEditShortcutPopover();
+        }
+
         if (!isAddMode) return;
-        
+
         const addForm = domElements.shortcuts.addForm;
         const clickedAddBtn = e.target.closest('.add-shortcut-to-container');
-        
+
         // If clicked outside form and not on an add button, close
         if (addForm && !addForm.contains(e.target) && !clickedAddBtn) {
             closeAddForm();
+        }
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && editingShortcut) {
+            closeEditShortcutPopover();
         }
     });
 }

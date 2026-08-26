@@ -1,3 +1,8 @@
+import { initPomodoroPanel, toggleRunning as togglePomodoroRunning, resetTimer as resetPomodoro, isPomodoroRunning } from './pomodoro.js';
+
+const STOPWATCH_STATE_KEY = 'stopwatchState';
+const TIMER_STATE_KEY = 'timerState';
+
 export class Stopwatch {
     constructor(displayElement) {
         this.display = displayElement;
@@ -5,18 +10,52 @@ export class Stopwatch {
         this.time = 0;
         this.interval = null;
         this.display.contentEditable = false;
+        this.loadState();
         this.updateDisplay();
+        if (this.running) this.resumeInterval();
+    }
+
+    // Stores an absolute "if it had started at this timestamp" anchor
+    // rather than the running interval itself — a reload can't preserve a
+    // live setInterval, but it can recompute elapsed time from that anchor,
+    // same approach pomodoro.js uses for its own persistence.
+    loadState() {
+        try {
+            const raw = localStorage.getItem(STOPWATCH_STATE_KEY);
+            if (!raw) return;
+            const state = JSON.parse(raw);
+            this.time = state.time || 0;
+            this.running = !!state.running;
+            if (this.running && typeof state.startedAt === 'number') {
+                this.time = Date.now() - state.startedAt;
+            }
+        } catch {
+            // Corrupt/missing state — just start fresh.
+        }
+    }
+
+    saveState() {
+        localStorage.setItem(STOPWATCH_STATE_KEY, JSON.stringify({
+            running: this.running,
+            time: this.time,
+            startedAt: this.running ? Date.now() - this.time : null
+        }));
+    }
+
+    resumeInterval() {
+        this.display.classList.add('running');
+        const startTime = Date.now() - this.time;
+        this.interval = setInterval(() => {
+            this.time = Date.now() - startTime;
+            this.updateDisplay();
+        }, 10);
     }
 
     start() {
         if (!this.running) {
             this.running = true;
-            this.display.classList.add('running');
-            const startTime = Date.now() - this.time;
-            this.interval = setInterval(() => {
-                this.time = Date.now() - startTime;
-                this.updateDisplay();
-            }, 10);
+            this.saveState();
+            this.resumeInterval();
         }
     }
 
@@ -25,12 +64,14 @@ export class Stopwatch {
             clearInterval(this.interval);
             this.running = false;
             this.display.classList.remove('running');
+            this.saveState();
         }
     }
 
     reset() {
         this.stop();
         this.time = 0;
+        this.saveState();
         this.updateDisplay();
     }
 
@@ -64,41 +105,63 @@ export class Stopwatch {
 }
 
 export class Timer {
-    constructor(displayElement) {
+    constructor(displayElement, progressFillElement) {
         this.display = displayElement;
+        this.progressFill = progressFillElement;
         this.running = false;
         this.remainingTime = 0;
+        this.totalTime = 0;
         this.interval = null;
-        this.inputBuffer = '';
+        // Which segment (hours/minutes/seconds) a click has armed for typing,
+        // and the raw digits typed into it since that click — see
+        // handleUnitClick()/handleUnitInput() below.
+        this.activeUnit = null;
+        this.editBuffer = '';
         this.alarmAudio = null;
         this.alarmInterval = null;
         this.isAlarmRinging = false;
+        this.finishedWhileAway = false;
         this.display.setAttribute('tabindex', '0');
-        this.display.contentEditable = false;
-        this.display.setAttribute('aria-readonly', 'true');
+
+        this.display.addEventListener('click', (e) => this.handleUnitClick(e));
+
         this.display.addEventListener('keydown', (e) => {
-            if (this.running) {
+            if (this.running || !this.activeUnit) {
                 e.preventDefault();
                 return;
             }
             if (/[0-9]/.test(e.key)) {
                 e.preventDefault();
-                this.handleInput(e.key);
+                this.handleUnitInput(e.key);
+            } else if (e.key === 'Backspace') {
+                e.preventDefault();
+                this.editBuffer = this.editBuffer.slice(0, -1);
+                this.applyUnitEdit(this.activeUnit, this.editBuffer ? parseInt(this.editBuffer, 10) : 0);
+            } else if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') {
+                e.preventDefault();
+                this.exitUnitEdit();
             } else {
                 e.preventDefault();
             }
         });
 
-        this.display.addEventListener('input', (e) => {
-            e.preventDefault();
-            this.updateDisplayFromSeconds();
+        // Clicking anywhere outside the display commits whatever was typed
+        // and drops the "which segment is armed" highlight.
+        document.addEventListener('click', (e) => {
+            if (this.activeUnit && !this.display.contains(e.target)) {
+                this.exitUnitEdit();
+            }
         });
 
-        this.display.addEventListener('paste', (e) => e.preventDefault());
-        this.display.addEventListener('cut', (e) => e.preventDefault());
-
+        this.loadState();
         this.updateDisplayFromSeconds();
         this.initAlarm();
+
+        if (this.running) {
+            this.resumeCountdown(); // sets this.running = true itself
+        } else if (this.finishedWhileAway) {
+            this.display.classList.add('finished');
+        }
     }
 
     initAlarm() {
@@ -185,18 +248,63 @@ export class Timer {
         this.display.classList.remove('finished');
     }
 
+    // Same absolute-anchor persistence approach as Stopwatch/pomodoro: store
+    // the timestamp the countdown will *end* at, not a live interval, so a
+    // reload can recompute exactly how much time actually passed.
+    loadState() {
+        try {
+            const raw = localStorage.getItem(TIMER_STATE_KEY);
+            if (!raw) return;
+            const state = JSON.parse(raw);
+            this.totalTime = state.totalTime || 0;
+            this.remainingTime = state.remainingTime || 0;
+            this.running = !!state.running;
+
+            if (this.running && typeof state.endsAt === 'number') {
+                const secondsLeft = Math.ceil((state.endsAt - Date.now()) / 1000);
+                if (secondsLeft > 0) {
+                    this.remainingTime = secondsLeft;
+                } else {
+                    // It finished while the tab was closed. Show the
+                    // finished state, but don't blast the alarm the instant
+                    // the page opens — that came from a moment you weren't
+                    // here for.
+                    this.remainingTime = 0;
+                    this.running = false;
+                    this.finishedWhileAway = true;
+                }
+            }
+        } catch {
+            // Corrupt/missing state — just start fresh.
+        }
+    }
+
+    saveState() {
+        localStorage.setItem(TIMER_STATE_KEY, JSON.stringify({
+            totalTime: this.totalTime,
+            remainingTime: this.remainingTime,
+            running: this.running,
+            endsAt: this.running ? Date.now() + this.remainingTime * 1000 : null
+        }));
+    }
+
+    resumeCountdown() {
+        this.running = true;
+        this.display.classList.add('running');
+        this.interval = setInterval(() => {
+            if (--this.remainingTime <= 0) {
+                this.stop();
+                this.remainingTime = 0;
+                this.startAlarm();
+            }
+            this.updateDisplayFromSeconds();
+        }, 1000);
+    }
+
     start() {
         if (this.remainingTime > 0 && !this.running) {
-            this.running = true;
-            this.display.classList.add('running');
-            this.interval = setInterval(() => {
-                if (--this.remainingTime <= 0) {
-                    this.stop();
-                    this.remainingTime = 0;
-                    this.startAlarm();
-                }
-                this.updateDisplayFromSeconds();
-            }, 1000);
+            this.resumeCountdown();
+            this.saveState();
         }
     }
 
@@ -205,6 +313,7 @@ export class Timer {
             clearInterval(this.interval);
             this.running = false;
             this.display.classList.remove('running');
+            this.saveState();
         }
         // Stop alarm when pausing
         this.stopAlarm();
@@ -213,13 +322,18 @@ export class Timer {
     reset() {
         this.stop();
         this.remainingTime = 0;
-        this.inputBuffer = '';
+        this.totalTime = 0;
+        this.activeUnit = null;
+        this.editBuffer = '';
         this.stopAlarm();
+        this.saveState();
         this.updateDisplayFromSeconds();
     }
 
     setTime(seconds) {
         this.remainingTime = seconds;
+        this.totalTime = seconds;
+        this.saveState();
         this.updateDisplayFromSeconds();
     }
 
@@ -227,27 +341,80 @@ export class Timer {
         const hours = Math.floor(this.remainingTime / 3600);
         const minutes = Math.floor((this.remainingTime % 3600) / 60);
         const seconds = this.remainingTime % 60;
-        this.display.innerHTML = `
-            <span class="digit hours">${String(hours).padStart(2, '0')}</span><span class="time-segment">:</span>
-            <span class="digit minutes">${String(minutes).padStart(2, '0')}</span><span class="time-segment">:</span>
-            <span class="digit seconds">${String(seconds).padStart(2, '0')}</span>
-        `;
+        const digitSpan = (unit, value) => {
+            const editing = this.activeUnit === unit ? ' editing' : '';
+            return `<span class="digit ${unit}${editing}">${String(value).padStart(2, '0')}</span>`;
+        };
+        this.display.innerHTML =
+            digitSpan('hours', hours) +
+            '<span class="time-segment">:</span>' +
+            digitSpan('minutes', minutes) +
+            '<span class="time-segment">:</span>' +
+            digitSpan('seconds', seconds);
+        if (this.progressFill) {
+            const elapsedFraction = this.totalTime > 0 ? 1 - (this.remainingTime / this.totalTime) : 0;
+            this.progressFill.style.width = `${elapsedFraction * 100}%`;
+        }
     }
 
-    handleInput(value) {
+    // Click a digit pair to arm it for typing — e.g. click "minutes" and
+    // type "30" to get 00:30:00, or "80" to carry into hours (01:20:00),
+    // without touching whichever units you didn't click.
+    handleUnitClick(e) {
         if (this.running) return;
-        this.inputBuffer = (this.inputBuffer + value).slice(-6);
-        const padded = this.inputBuffer.padStart(6, '0');
-        let hours = parseInt(padded.slice(0, 2)) || 0;
-        let minutes = parseInt(padded.slice(2, 4)) || 0;
-        let seconds = parseInt(padded.slice(4, 6)) || 0;
+        const digitEl = e.target.closest('.digit');
+        const unit = ['hours', 'minutes', 'seconds'].find((u) => digitEl?.classList.contains(u));
+        if (!unit) return;
+        // Stop here, before updateDisplayFromSeconds() below detaches
+        // e.target — the document-level "click outside" listener otherwise
+        // sees a now-detached target and immediately un-arms the unit this
+        // same click just armed.
+        e.stopPropagation();
+        this.activeUnit = unit;
+        this.editBuffer = '';
+        this.updateDisplayFromSeconds();
+    }
+
+    handleUnitInput(digit) {
+        this.editBuffer = (this.editBuffer + digit).slice(-3);
+        this.applyUnitEdit(this.activeUnit, parseInt(this.editBuffer, 10));
+    }
+
+    exitUnitEdit() {
+        this.activeUnit = null;
+        this.editBuffer = '';
+        this.updateDisplayFromSeconds();
+    }
+
+    // Sets just the clicked unit to `value`, carrying any overflow (e.g. 80
+    // minutes) up into the next unit rather than clamping it away.
+    applyUnitEdit(unit, value) {
+        let hours = Math.floor(this.remainingTime / 3600);
+        let minutes = Math.floor((this.remainingTime % 3600) / 60);
+        let seconds = this.remainingTime % 60;
+
+        if (unit === 'seconds') {
+            seconds = value % 60;
+            minutes += Math.floor(value / 60);
+        } else if (unit === 'minutes') {
+            minutes = value % 60;
+            hours += Math.floor(value / 60);
+        } else {
+            hours = value;
+        }
+        hours += Math.floor(minutes / 60);
+        minutes = minutes % 60;
         hours = Math.min(hours, 99);
-        minutes = Math.min(minutes, 59);
-        seconds = Math.min(seconds, 59);
+
         this.remainingTime = hours * 3600 + minutes * 60 + seconds;
+        this.totalTime = this.remainingTime;
+        this.saveState();
         this.updateDisplayFromSeconds();
     }
 }
+
+const ACTIVE_TOOL_KEY = 'activeTimeTool';
+const VALID_TOOLS = ['stopwatch', 'timer', 'pomodoro'];
 
 export let stopwatch;
 export let timer;
@@ -258,21 +425,28 @@ export function initializeTimeTools() {
     stopwatch = new Stopwatch(stopwatchDisplay);
 
     const timerDisplay = document.querySelector('.timer .display');
-    timer = new Timer(timerDisplay);
+    const timerProgressFill = document.getElementById('timer-progress-fill');
+    timer = new Timer(timerDisplay, timerProgressFill);
 
-    const hoursEl = timerDisplay.querySelector('.hours');
-    const minutesEl = timerDisplay.querySelector('.minutes');
-    const secondsEl = timerDisplay.querySelector('.seconds');
+    initPomodoroPanel();
 
-    const toggleButtons = document.querySelectorAll('.toggle-btn');
+    const toggleButtons = document.querySelectorAll('.mode-tabs .toggle-btn');
     const startStopBtn = document.querySelector('.controls .start-stop');
     const resetBtn = document.querySelector('.controls .reset');
 
+    function isRunningFor(tool) {
+        if (tool === 'stopwatch') return stopwatch.running;
+        if (tool === 'timer') return timer.running;
+        return isPomodoroRunning();
+    }
+
     function updateUI() {
         const icon = startStopBtn.querySelector('i');
-        const isRunning = activeTool === 'stopwatch' ? stopwatch.running : timer.running;
+        const label = startStopBtn.querySelector('span');
+        const isRunning = isRunningFor(activeTool);
         icon.classList.toggle('fa-play', !isRunning);
         icon.classList.toggle('fa-pause', isRunning);
+        if (label) label.textContent = isRunning ? 'Pause' : 'Start';
         startStopBtn.setAttribute('aria-label', isRunning ? 'Pause' : 'Start');
     }
 
@@ -284,15 +458,17 @@ export function initializeTimeTools() {
                 if (activeTool === 'timer' && timer.isAlarmRinging) {
                     timer.stopAlarm();
                 }
-                
+
                 activeTool = target;
+                localStorage.setItem(ACTIVE_TOOL_KEY, activeTool);
                 toggleButtons.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 document.querySelector('.stopwatch').classList.toggle('active', target === 'stopwatch');
                 document.querySelector('.timer').classList.toggle('active', target === 'timer');
+                document.querySelector('.pomodoro-panel').classList.toggle('active', target === 'pomodoro');
                 if (activeTool === 'stopwatch') {
                     stopwatch.updateDisplay();
-                } else {
+                } else if (activeTool === 'timer') {
                     timer.updateDisplayFromSeconds();
                 }
                 updateUI();
@@ -304,9 +480,11 @@ export function initializeTimeTools() {
         if (activeTool === 'stopwatch') {
             if (stopwatch.running) stopwatch.stop();
             else stopwatch.start();
-        } else {
+        } else if (activeTool === 'timer') {
             if (timer.running) timer.stop();
             else timer.start();
+        } else {
+            togglePomodoroRunning();
         }
         updateUI();
     });
@@ -314,13 +492,23 @@ export function initializeTimeTools() {
     resetBtn.addEventListener('click', () => {
         if (activeTool === 'stopwatch') {
             stopwatch.reset();
-        } else {
+        } else if (activeTool === 'timer') {
             timer.reset();
+        } else {
+            resetPomodoro();
         }
         updateUI();
     });
 
-    document.querySelector('.toggle-btn[data-target="stopwatch"]').classList.add('active');
-    document.querySelector('.stopwatch').classList.add('active');
+    // Restore whichever tab was showing before reload — a Timer/Pomodoro
+    // that's still silently counting down in the background shouldn't
+    // surface behind a "Stopwatch, not running" tab that says otherwise.
+    const savedTool = localStorage.getItem(ACTIVE_TOOL_KEY);
+    activeTool = VALID_TOOLS.includes(savedTool) ? savedTool : 'stopwatch';
+
+    toggleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === activeTool));
+    document.querySelector('.stopwatch').classList.toggle('active', activeTool === 'stopwatch');
+    document.querySelector('.timer').classList.toggle('active', activeTool === 'timer');
+    document.querySelector('.pomodoro-panel').classList.toggle('active', activeTool === 'pomodoro');
     updateUI();
 }
