@@ -19,6 +19,12 @@
 
 const STATE_KEY = 'pomodoroState';
 const TICK_MS = 250;
+// A hangerő-csúszka NÉGYZETESEN (nem lineárisan) skálázza a nyers gaint:
+// 100%-nál MAX_BEEP_GAIN-szeres (jóval hangosabb, mint egy sima, 1-re
+// korlátozott sinus), félúton (50%) nagyjából a régi, egyszerű gain=1
+// hangerő, lejjebb pedig gyorsan halkul — így a csúszka teljes hosszában
+// érezhető a különbség, nem csak a felső harmadában.
+const MAX_BEEP_GAIN = 5;
 
 const PHASE_LABELS = {
     work: 'FOCUS',
@@ -34,9 +40,9 @@ const PHASE_COLORS = {
 
 //! ---------- ÁLLAPOT ----------
 
-// CÉL: Gyári alapértelmezett beállítások (percben)
+// CÉL: Gyári alapértelmezett beállítások (percben; volume 0-100 skálán)
 function defaultSettings() {
-    return { workMin: 25, shortBreakMin: 5, longBreakMin: 15, sessionsUntilLong: 4 };
+    return { workMin: 25, shortBreakMin: 5, longBreakMin: 15, sessionsUntilLong: 4, volume: 100 };
 }
 
 // CÉL: Gyári alapértelmezett állapot (munka fázissal, megállítva)
@@ -109,23 +115,37 @@ function nextPhase() {
 }
 
 /*
-    CÉL: Riasztó hangjelzés lejátszása (fázisváltáskor)
-     - Két, egymást követő "csippenés", az audio-óra (nem setTimeout)
-       alapján ütemezve, hogy a második is minta-pontosan üljön
+    CÉL: Két, egymást követő "csippenés" lejátszása adott hangerővel
+     - Az audio-óra (nem setTimeout) alapján ütemezve, hogy a második is
+       minta-pontosan üljön
+     - volumePercent 0-100; 0-nál nincs lejátszás (az exponenciális
+       gain-rámpa nem futtatható 0 célértékkel)
+     - A nyers gain a MAX_BEEP_GAIN-nel túlvezérelt (>1) tartományba
+       megy, egy DynamicsCompressorNode-on át a kimenetre — így 100%-nál
+       tényleg érezhetően hangos, de nem vág/torzul csúnyán, mint egy
+       egyszerű, 1-re korlátozott gain esetén tenné
+     - A beállítások popover is ezt hívja élő előhallgatásra, amikor a
+       felhasználó húzza a csúszkát
 */
-function playBeep() {
+function playChime(volumePercent) {
+    if (!(volumePercent > 0)) return;
     try {
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+        const peakGain = MAX_BEEP_GAIN * (volumePercent / 100) ** 2;
         const now = audioCtx.currentTime;
+
+        const compressor = audioCtx.createDynamicsCompressor();
+        compressor.connect(audioCtx.destination);
+
         [0, 0.45].forEach((offset) => {
             const start = now + offset;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.frequency.value = 880;
             osc.connect(gain);
-            gain.connect(audioCtx.destination);
+            gain.connect(compressor);
             gain.gain.setValueAtTime(0.0001, start);
-            gain.gain.exponentialRampToValueAtTime(1, start + 0.02);
+            gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.02);
             gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
             osc.start(start);
             osc.stop(start + 0.4);
@@ -133,6 +153,11 @@ function playBeep() {
     } catch {
         // A hang nem létfontosságú — a widget hang nélkül is jól működik.
     }
+}
+
+// CÉL: Riasztó hangjelzés lejátszása fázisváltáskor, a mentett hangerővel
+function playBeep() {
+    playChime(state.settings.volume);
 }
 
 //! ---------- IDŐSZÁMÍTÁS ----------
@@ -268,6 +293,7 @@ function getSettingsPopover() {
         <label class="pomodoro-field">Short break (min)<input type="number" min="1" max="60" class="pomodoro-input-short"></label>
         <label class="pomodoro-field">Long break (min)<input type="number" min="1" max="90" class="pomodoro-input-long"></label>
         <label class="pomodoro-field">Sessions before long break<input type="number" min="1" max="12" class="pomodoro-input-sessions"></label>
+        <label class="pomodoro-field">Notification volume<span class="pomodoro-volume-control"><input type="range" min="0" max="100" step="5" class="pomodoro-input-volume"><span class="pomodoro-volume-value"></span></span></label>
         <div class="edit-shortcut-actions pomodoro-settings-actions">
             <button type="button" class="pomodoro-settings-defaults action-btn" title="Reset to defaults">Reset</button>
             <button type="button" class="pomodoro-settings-cancel action-btn">Cancel</button>
@@ -280,6 +306,11 @@ function getSettingsPopover() {
     settingsPopoverEl.querySelector('.pomodoro-settings-cancel').addEventListener('click', closeSettingsPopover);
     settingsPopoverEl.querySelector('.pomodoro-settings-save').addEventListener('click', saveSettings);
     settingsPopoverEl.querySelector('.pomodoro-settings-defaults').addEventListener('click', () => fillSettingsForm(defaultSettings()));
+
+    const volumeInput = settingsPopoverEl.querySelector('.pomodoro-input-volume');
+    volumeInput.addEventListener('input', () => updateVolumeLabel(settingsPopoverEl));
+    volumeInput.addEventListener('change', () => playChime(Number(volumeInput.value)));
+
     settingsPopoverEl.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); saveSettings(); }
         else if (e.key === 'Escape') closeSettingsPopover();
@@ -314,6 +345,11 @@ function positionPopover(popover, clickEvent) {
     });
 }
 
+// CÉL: A hangerő-csúszka melletti százalék-felirat frissítése a csúszka aktuális értékére
+function updateVolumeLabel(popover) {
+    popover.querySelector('.pomodoro-volume-value').textContent = `${popover.querySelector('.pomodoro-input-volume').value}%`;
+}
+
 // CÉL: A popover mezőinek feltöltése a megadott beállításokkal
 function fillSettingsForm(settings) {
     const popover = getSettingsPopover();
@@ -321,6 +357,8 @@ function fillSettingsForm(settings) {
     popover.querySelector('.pomodoro-input-short').value = settings.shortBreakMin;
     popover.querySelector('.pomodoro-input-long').value = settings.longBreakMin;
     popover.querySelector('.pomodoro-input-sessions').value = settings.sessionsUntilLong;
+    popover.querySelector('.pomodoro-input-volume').value = settings.volume;
+    updateVolumeLabel(popover);
 }
 
 // CÉL: A beállítások popover megnyitása, a jelenlegi állapot értékeivel feltöltve
@@ -337,19 +375,22 @@ function openSettingsPopover(clickEvent) {
      - Közös a beállítások popover Save gombja és az Import All folyamat
        számára — mindkettőnek csak annyi kell: "itt az új settings,
        validáld és alkalmazd"
-    BE: settings - { workMin, shortBreakMin, longBreakMin, sessionsUntilLong }
+    BE: settings - { workMin, shortBreakMin, longBreakMin, sessionsUntilLong, volume }
     KI: true, ha sikerült alkalmazni; false, ha érvénytelen volt
     MEGJEGYZÉS:
      - Beállítás-váltáskor a FOLYAMATBAN lévő fázis frissen újraindul,
        nem próbálja megtartani az eltelt idő arányát törtrészként
 */
 function applySettings(settings) {
-    const { workMin, shortBreakMin, longBreakMin, sessionsUntilLong } = settings;
+    const { workMin, shortBreakMin, longBreakMin, sessionsUntilLong, volume } = settings;
     if ([workMin, shortBreakMin, longBreakMin, sessionsUntilLong].some((n) => !Number.isFinite(n) || n < 1)) {
         return false;
     }
+    if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
+        return false;
+    }
 
-    state.settings = { workMin, shortBreakMin, longBreakMin, sessionsUntilLong };
+    state.settings = { workMin, shortBreakMin, longBreakMin, sessionsUntilLong, volume };
     state.remainingMs = durationMs(state.phase);
     if (state.isRunning) state.endsAt = Date.now() + state.remainingMs;
     saveState();
@@ -364,7 +405,8 @@ function saveSettings() {
         workMin: parseInt(popover.querySelector('.pomodoro-input-work').value, 10),
         shortBreakMin: parseInt(popover.querySelector('.pomodoro-input-short').value, 10),
         longBreakMin: parseInt(popover.querySelector('.pomodoro-input-long').value, 10),
-        sessionsUntilLong: parseInt(popover.querySelector('.pomodoro-input-sessions').value, 10)
+        sessionsUntilLong: parseInt(popover.querySelector('.pomodoro-input-sessions').value, 10),
+        volume: parseInt(popover.querySelector('.pomodoro-input-volume').value, 10)
     };
 
     if (!applySettings(settings)) {

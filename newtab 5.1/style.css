@@ -2267,6 +2267,25 @@ textarea:focus {
     text-align: right;
 }
 
+.pomodoro-volume-control {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2xs);
+}
+
+.pomodoro-field input[type="range"] {
+    width: 90px;
+    padding: 0;
+    accent-color: var(--accent-primary);
+}
+
+.pomodoro-volume-value {
+    min-width: 2.5em;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
+}
+
 .pomodoro-settings-actions {
     flex-wrap: nowrap;
 }
