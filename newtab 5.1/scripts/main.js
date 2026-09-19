@@ -1,7 +1,7 @@
 /*======================================================================
     main.js - Belépési pont
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Az összes modul (scripts/*.js) inicializálása, DOMContentLoaded-re
      - A dinamikusan, JS-ből létrehozott, közös vezérlők felépítése: az
        Import/Export gombok és az egyetlen, közös Edit gomb
@@ -25,6 +25,8 @@
      - //? egy-egy alpont/megjegyzés kiemelésére, a //!-nál kisebb súllyal
 ======================================================================*/
 
+//! ---------- MODULOK ----------
+
 import { domElements } from './dom.js';
 import { initializeTimeTools } from './timeTools.js';
 import { getPomodoroSettings, setPomodoroSettings } from './pomodoro.js';
@@ -36,6 +38,9 @@ import { initializeThemeCustomizer } from './themeCustomizer.js';
 import { initializeQuickTools } from './quickTools.js';
 import { initQrWidget } from './qrWidget.js';
 
+// A shortcuts.js-ből szándékosan sok mindent importálunk: az Import/Export
+// a teljes shortcut-konfigurációt is kezeli, nem csak a megjelenítést
+
 /*
     CÉL: Az oldal felépítése induláskor (DOMContentLoaded-re hívva)
      - Minden modul saját inicializáló függvényének meghívása
@@ -44,6 +49,11 @@ import { initQrWidget } from './qrWidget.js';
        és a fix, jobb alsó gombcsoportba (#page-controls) illesztése
 */
 function init() {
+
+    //! ---------- MODULOK INICIALIZÁLÁSA ----------
+
+    // A sorrend nem véletlen: előbb a tartalom (keresés, shortcut-ok,
+    // valuta), és csak utána a rájuk épülő UI-rétegek (téma, popoverek)
     setupSearch();
     loadShortcuts();
     setupClickOutsideListener();
@@ -56,12 +66,15 @@ function init() {
     initializeQuickTools();
     initQrWidget();
 
+    //! ---------- SHORTCUT-HOZZÁADÁS BEKÖTÉSE ----------
+
     if (domElements.shortcuts.addButton) {
         domElements.shortcuts.addButton.addEventListener('click', addShortcut);
     } else {
         console.error('Add shortcut button not found');
     }
 
+    // Enterre is lehessen hozzáadni, mindkét mezőből
     if (domElements.shortcuts.newName) {
         domElements.shortcuts.newName.addEventListener('keypress', handleAddShortcutKeyPress);
     }
@@ -69,6 +82,7 @@ function init() {
         domElements.shortcuts.newUrl.addEventListener('keypress', handleAddShortcutKeyPress);
     }
 
+    // A fix, jobb alsó gombcsoport - ide megy minden dinamikus vezérlő
     const pageControls = document.getElementById('page-controls');
 
     //! ---------- IMPORT / EXPORT GOMBOK ----------
@@ -78,20 +92,22 @@ function init() {
     // nem egy sima szöveges gombpár a shortcut-oszlop tetején. Rejtve
     // maradnak, amíg szerkesztő mód nincs bekapcsolva — a
     // shortcuts.js-beli toggleEditMode() állítja a láthatóságukat.
+    //? Import gomb
     domElements.buttons.import = document.createElement('button');
     domElements.buttons.import.id = 'import-btn';
     domElements.buttons.import.classList.add('icon-btn');
     domElements.buttons.import.title = 'Import All Settings';
     domElements.buttons.import.innerHTML = '<i class="fas fa-file-import"></i>';
-    domElements.buttons.import.style.display = 'none';
+    domElements.buttons.import.style.display = 'none'; // csak szerkesztő módban látszik
     domElements.buttons.import.addEventListener('click', importAllSettings);
 
+    //? Export gomb (ugyanaz a minta, csak a másik irányba)
     domElements.buttons.export = document.createElement('button');
     domElements.buttons.export.id = 'export-btn';
     domElements.buttons.export.classList.add('icon-btn');
     domElements.buttons.export.title = 'Export All Settings';
     domElements.buttons.export.innerHTML = '<i class="fas fa-file-export"></i>';
-    domElements.buttons.export.style.display = 'none';
+    domElements.buttons.export.style.display = 'none'; // ez is rejtve indul
     domElements.buttons.export.addEventListener('click', exportAllSettings);
 
     if (pageControls) {
@@ -108,6 +124,7 @@ function init() {
     domElements.buttons.edit.id = 'edit-btn';
     domElements.buttons.edit.textContent = 'Edit';
     domElements.buttons.edit.addEventListener('click', () => {
+        // Egy kattintás, két modul - így nem tudnak kicsúszni egymásból
         toggleEditMode();
         toggleBottomBarEditMode();
     });
@@ -123,6 +140,9 @@ function init() {
        valuták, Pomodoro beállítások — mind egy objektumban
 */
 function exportAllSettings() {
+
+    // Minden érték mellé ott a fallback is, hogy egy soha nem piszkált
+    // beállítás is értelmes alapértékkel kerüljön a fájlba
     const allSettings = {
         shortcuts: getShortcutsConfig(), // Most már a teljes konténer-struktúrát exportálja
         bottomBar: JSON.parse(localStorage.getItem('bottomBarConfig') || '{"langTools":[],"aiTools":[]}'),
@@ -136,12 +156,20 @@ function exportAllSettings() {
         pomodoro: getPomodoroSettings()
     };
 
+    // A null, 2 paraméterek miatt szépen behúzott, kézzel is olvasható
+    // JSON lesz belőle, nem egyetlen hosszú sor
     const blob = new Blob([JSON.stringify(allSettings, null, 2)], { type: 'application/json' });
+
+    // Klasszikus trükk: készítünk egy láthatatlan <a download>-t, "rákattintunk",
+    // és a böngésző elindítja a letöltést
+    // https://stackoverflow.com/questions/19327749/javascript-blob-filename-without-link
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'newtab-settings.json';
     a.click();
+
+    // A blob URL-t illik felszabadítani, különben a memóriában marad
     URL.revokeObjectURL(url);
 }
 
@@ -154,15 +182,22 @@ function exportAllSettings() {
      - A végén újratölti az oldalt, hogy minden modul a friss állapotot lássa
 */
 function importAllSettings() {
+
+    // Ugyanaz a trükk, mint exportnál, csak fordítva: egy DOM-ba be sem
+    // illesztett <input type="file">-ra kattintunk rá programból
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = '.json';
+
     fileInput.onchange = (event) => {
-        const file = event.target.files[0];
+        const file = event.target.files[0]; // csak az elsőt nézzük, több nem kell
         if (file) {
             const reader = new FileReader();
+
             reader.onload = (e) => {
                 try {
+                    // Innentől MINDEN a try-ban van: egy hibás fájl se
+                    // hagyhassa félig átállított állapotban a beállításokat
                     const importedData = JSON.parse(e.target.result);
 
                     // Shortcut-ok importálása (mind a régi, mind az új formátumot támogatja)
@@ -183,6 +218,8 @@ function importAllSettings() {
                     }
 
                     // Low Detail Mode importálása
+                    //? Itt !== undefined kell, és nem sima if: a false is
+                    //? érvényes, elmentendő érték
                     if (importedData.lowDetailMode !== undefined) {
                         localStorage.setItem('lowDetailMode', importedData.lowDetailMode);
                         document.documentElement.classList.toggle('low-detail', importedData.lowDetailMode);
@@ -214,6 +251,9 @@ function importAllSettings() {
                     }
 
                     alert('All settings imported successfully!');
+
+                    // Újratöltés, hogy minden modul tisztán, a friss
+                    // localStorage-ból induljon újra
                     location.reload();
                 } catch (error) {
                     console.error('Error importing settings:', error);
@@ -223,7 +263,10 @@ function importAllSettings() {
             reader.readAsText(file);
         }
     };
-    fileInput.click();
+
+    fileInput.click(); // megnyitjuk a fájlválasztó ablakot
 }
 
+// Belépési pont: megvárjuk, amíg a DOM összeáll, különben a
+// getElementById-ok (lásd dom.js) mind null-t adnának
 document.addEventListener('DOMContentLoaded', init);

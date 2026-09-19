@@ -1,6 +1,6 @@
 /*======================================================================
     dom.js - Központi DOM-referenciák
-------------------------------------------------------------------------
+----------------------------------------------------------------------
     CÉL:
      - Az index.html leggyakrabban használt elemeit egyetlen helyen
        lekérdezni és exportálni, hogy a többi modulnak ne kelljen

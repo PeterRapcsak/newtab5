@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <!--======================================================================
     index.html - A New Tab oldal fő HTML váza
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - A statikus DOM-váz felépítése: keresősáv + részletes keresés,
        Quick Tools ikonok, valutaváltó, Time Tools (Stopwatch/Timer/
        Pomodoro), QR-kód widget, shortcut-ok, alsó eszköztár, page
@@ -21,16 +21,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Tab</title>
+
+    <!-- Kétféle ikon: a modern böngészők a PNG-t, a régebbiek az .ico-t használják -->
     <link rel="icon" href="favicon/home16.png" type="image/png">
     <link rel="shortcut icon" href="favicon.ico">
+
     <link rel="stylesheet" href="style.css">
+
+    <!-- Font Awesome: innen jön az ÖSSZES ikon (fas fa-* osztályok) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
+    <!-- ==================== FELSŐ SZEKCIÓ ====================
+         Két hasáb: balra az eszközök, jobbra a shortcut-ok -->
     <div class="top-section">
         <div class="left-half">
             <!-- Keresősáv (search.js) -->
             <div class="search-bar glass-card">
+                <!-- A keresésre az Enter és a gomb is jó (lásd setupSearch) -->
                 <input type="text" id="search-q" placeholder="Search the web...">
                 <button id="search-btn">Search</button>
                 <button type="button" id="advanced-btn" class="icon-btn" title="Advanced search" aria-label="Toggle advanced search">
@@ -52,6 +60,9 @@
             <!-- Részletes keresés (search.js állítja össze a lekérdezést, quickTools.js nyitja/zárja) -->
             <div id="advanced-search" class="advanced-search glass-card">
                 <div class="advanced-grid">
+                    <!-- Keresőmotor + dátumszűrés. A value-k a search.js-beli
+                         searchEngines id-jeivel, illetve a Google &tbs=qdr:
+                         paraméterének értékeivel egyeznek meg -->
                     <div class="advanced-row advanced-engine-row">
                         <select id="search-engine-select" class="compact-select">
                             <option value="google">Google</option>
@@ -72,6 +83,9 @@
                         </select>
                     </div>
 
+                    <!-- Google-stílusú operátorok. Mindegyik mező máshogy
+                         épül be a lekérdezésbe: idézőjel, OR, "-" előjel
+                         (lásd performSearch a search.js-ben) -->
                     <div class="advanced-group">
                         <input type="text" id="adv-all-words" placeholder="All these words">
                         <input type="text" id="adv-exact-phrase" placeholder="Exact phrase">
@@ -82,6 +96,7 @@
                         <input type="text" id="adv-none-words" placeholder="None of these words">
                     </div>
 
+                    <!-- Fájltípus-szűrés: a bepipált value-kból filetype: operátorok lesznek -->
                     <div class="advanced-row">
                         <div class="file-types">
                             <div class="compact-checkboxes">
@@ -105,6 +120,8 @@
                 <!-- Valutaváltó (currency.js tölti fel a <select>-eket és számol) -->
                 <div class="currency-exchanger glass-card">
                     <form class="exchange-form">
+                        <!-- A két <select> ÜRESEN indul - a loadCurrencies()
+                             tölti fel őket az API-ból kapott listával -->
                         <div class="currency-row">
                             <select id="from-currency"></select>
                             <div class="input-with-spinner">
@@ -136,6 +153,8 @@
                         <button class="toggle-btn" data-target="timer">Timer</button>
                         <button class="toggle-btn" data-target="pomodoro">Pomodoro</button>
                     </div>
+                    <!-- Egyszerre mindig csak egy panelnek van .active
+                         osztálya - a fülváltást a timeTools.js intézi -->
                     <div class="time-tool-content">
                         <div class="stopwatch active">
                             <div class="display">0.00</div>
@@ -159,6 +178,7 @@
                             <div class="time-progress"><div class="time-progress-fill" id="pomodoro-progress-fill"></div></div>
                         </div>
                     </div>
+                    <!-- KÖZÖS vezérlők: mindhárom fül ezt a két gombot használja -->
                     <div class="controls">
                         <button class="start-stop"><i class="fas fa-play"></i><span>Start</span></button>
                         <button class="reset"><i class="fas fa-redo"></i></button>
@@ -168,7 +188,11 @@
 
             <!-- QR-kód generátor (qrWidget.js + a becsomagolt qrcode-generator.js) -->
             <div class="qr-widget glass-card" id="qr-widget">
+                <!-- autocomplete="off": amit ide beírnak (wifi jelszó, privát
+                     link), azt a böngésző se jegyezze meg -->
                 <input type="text" id="qr-input" class="qr-input" placeholder="Paste text or a URL…" autocomplete="off" spellcheck="false">
+
+                <!-- Alapból hidden - csak akkor jelenik meg, ha van mit mutatni -->
                 <div class="qr-output" id="qr-output" hidden></div>
             </div>
         </div>
@@ -178,6 +202,7 @@
             <div id="shortcuts-wrapper" class="shortcuts-wrapper">
                 <!-- A konténerek ide kerülnek dinamikusan, JS-ből -->
             </div>
+            <!-- "Új shortcut" form: rejtve indul, a konténerek "+" gombja nyitja meg -->
             <div class="add-shortcut glass-card" style="display: none;">
                 <input type="text" id="new-shortcut-name" placeholder="Name">
                 <input type="text" id="new-shortcut-url" placeholder="URL">
@@ -193,8 +218,11 @@
 
     <!-- Téma testreszabó (themeCustomizer.js) + az egyetlen, központi Edit
          gomb (main.js), jobb alul -->
+    <!-- Szándékosan üres: a téma-fogaskerék, az Edit és az Import/Export
+         gombok mind JS-ből kerülnek ide -->
     <div class="page-controls" id="page-controls"></div>
 
+    <!-- type="module" kötelező: a scripts/*.js fájlok ES modulok (import/export) -->
     <script type="module" src="scripts/main.js"></script>
 </body>
 </html>

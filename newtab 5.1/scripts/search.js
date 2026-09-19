@@ -1,7 +1,7 @@
 /*======================================================================
     search.js - Keresősáv és keresőmotorok
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - A keresőmotorok listája (searchEngines) és az aktuálisan
        kiválasztott motor (selectedEngine) tárolása
      - A fő keresősáv (Enter / Search gomb) és a "részletes keresés"
@@ -27,6 +27,8 @@ export const searchEngines = [
     { id: 'baidu', name: 'Baidu', url: 'https://www.baidu.com/s?wd=', icon: 'https://www.baidu.com/favicon.ico' }
 ];
 export let selectedEngine = 'google'; // alapértelmezett kereső, amíg a felhasználó nem vált másikra
+// MEGJEGYZÉS: ez szándékosan NEM megy localStorage-ba itt - a mentést/
+// visszatöltést a main.js Import/Export ága intézi (selectedSearchEngine kulcs)
 
 
 /*
@@ -36,8 +38,10 @@ export let selectedEngine = 'google'; // alapértelmezett kereső, amíg a felha
 */
 export function initializeSearchSettings() {
     const engineSelect = document.getElementById('search-engine-select');
+
     if (engineSelect) {
-        engineSelect.value = selectedEngine;
+        engineSelect.value = selectedEngine; // a <select> álljon az aktuális motorra
+
         engineSelect.addEventListener('change', (e) => {
             selectedEngine = e.target.value; // kiválasztott motor lecserélése
             console.log('Selected engine:', selectedEngine);
@@ -62,8 +66,8 @@ export function setupSearch() {
     // event listener (gombkattintás / Enter) is ezt hívja meg
     const performSearch = () => {
         const mainQuery = domElements.search.input?.value.trim();
-        let query = mainQuery;
-        let params = ''; // extra URL paraméterek (pld. dátumszűrés)
+        let query = mainQuery;   // ehhez fűzzük hozzá az összes operátort
+        let params = '';         // extra URL paraméterek (pld. dátumszűrés)
 
         //? Részletes keresés mezőinek beolvasása, HA a popover épp nyitva van
         if (domElements.advancedSearch && domElements.advancedSearch.classList.contains('popover-panel')) {
@@ -71,6 +75,7 @@ export function setupSearch() {
             const exactPhrase = document.getElementById('adv-exact-phrase').value.trim();
             const anyWords = document.getElementById('adv-any-words').value.trim();
             const noneWords = document.getElementById('adv-none-words').value.trim();
+            // A :checked szelektor csak a bepipált dobozokat adja vissza
             const fileTypes = Array.from(document.querySelectorAll('#advanced-search input[type="checkbox"]:checked')).map(cb => cb.value);
             const dateRange = document.getElementById('adv-date-range').value;
 
@@ -86,9 +91,12 @@ export function setupSearch() {
             if (dateRange && selectedEngine === 'google') params += '&tbs=qdr:' + dateRange; // dátumszűrés, csak Google-nél
         }
 
+        // Üres keresésre nem nyitunk fület
         if (query) {
             const engine = searchEngines.find(e => e.id === selectedEngine);
             if (engine) {
+                // encodeURIComponent: a szóközök, idézőjelek és a "+"
+                // jelek is helyesen kerüljenek be az URL-be
                 let searchUrl = `${engine.url}${encodeURIComponent(query)}`;
                 if (selectedEngine === 'google' && params) {
                     searchUrl += params; // dátumszűrés csak itt kerül a végére

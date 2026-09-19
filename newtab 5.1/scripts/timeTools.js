@@ -1,7 +1,7 @@
 /*======================================================================
     timeTools.js - Stopper és Visszaszámláló (Time Tools kártya)
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Stopwatch (stopper) és Timer (visszaszámláló) osztályok, saját
        megjelenítéssel, localStorage-alapú állapotmentéssel
      - A Time Tools kártya 3 füle közötti váltás (Stopwatch / Timer /
@@ -16,21 +16,36 @@
 
 import { initPomodoroPanel, toggleRunning as togglePomodoroRunning, resetTimer as resetPomodoro, isPomodoroRunning } from './pomodoro.js';
 
+// A két eszköz külön localStorage kulcson él, hogy egymástól függetlenül
+// lehessen menteni/visszatölteni őket (a Pomodoro a saját kulcsát viszi)
 const STOPWATCH_STATE_KEY = 'stopwatchState';
 const TIMER_STATE_KEY = 'timerState';
 
 //! ======================== STOPWATCH (stopper) ========================
 
+// CÉL: Egyszerű, felfelé számláló stopper, századmásodperc pontossággal
 export class Stopwatch {
+
+    /*
+        CÉL: Stopper létrehozása és azonnali "életre keltése"
+        BE: displayElement - a kijelző DOM eleme
+        MEGJEGYZÉS:
+            A konstruktor már be is tölti a mentett állapotot, és ha az
+            azt mondja, hogy futott, akkor tovább is indítja
+    */
     constructor(displayElement) {
         this.display = displayElement;
-        this.running = false;
-        this.time = 0;
-        this.interval = null;
+        this.running = false;   // fut-e épp
+        this.time = 0;          // eltelt idő ms-ben
+        this.interval = null;   // a setInterval azonosítója
+
+        // A Timerrel ellentétben a stoppert nem lehet kézzel átírni
         this.display.contentEditable = false;
+
         this.loadState();
         this.updateDisplay();
-        if (this.running) this.resumeInterval();
+
+        if (this.running) this.resumeInterval(); // a fül bezárása alatt is ment tovább
     }
 
     /*
@@ -46,10 +61,14 @@ export class Stopwatch {
     loadState() {
         try {
             const raw = localStorage.getItem(STOPWATCH_STATE_KEY);
-            if (!raw) return;
+            if (!raw) return; // még sosem futott -> maradnak a konstruktor alapértékei
+
             const state = JSON.parse(raw);
             this.time = state.time || 0;
-            this.running = !!state.running;
+            this.running = !!state.running; // a !! bármit rendes logikai értékké tesz
+
+            // Ha futott, a mentett this.time már elavult -> a horgonyból
+            // számoljuk újra a TÉNYLEGESEN eltelt időt
             if (this.running && typeof state.startedAt === 'number') {
                 this.time = Date.now() - state.startedAt;
             }
@@ -63,6 +82,8 @@ export class Stopwatch {
         localStorage.setItem(STOPWATCH_STATE_KEY, JSON.stringify({
             running: this.running,
             time: this.time,
+            // A horgony: "mintha ekkor indult volna" - visszafelé számolva
+            // az eddig eltelt időből. Megállított állapotban nincs értelme
             startedAt: this.running ? Date.now() - this.time : null
         }));
     }
@@ -70,11 +91,16 @@ export class Stopwatch {
     // CÉL: A számláló-intervallum (újra)indítása egy kiszámolt kezdő időponttól
     resumeInterval() {
         this.display.classList.add('running');
+
+        // Ugyanaz a horgony-elv, mint a mentésnél: nem gyűjtögetjük az
+        // eltelt időt lépésenként (az elcsúszna), hanem minden tick-nél
+        // a fix kezdőponthoz képest számolunk
         const startTime = Date.now() - this.time;
+
         this.interval = setInterval(() => {
             this.time = Date.now() - startTime;
             this.updateDisplay();
-        }, 10);
+        }, 10); // 10ms = századmásodperces felbontás
     }
 
     // CÉL: Indítás (ha még nem fut)
@@ -115,13 +141,19 @@ export class Stopwatch {
     updateDisplay() {
         const totalMilliseconds = this.time;
 
+        // Maradékos osztásokkal bontjuk szét: minden szint a NÁLA nagyobb
+        // egység maradékából számol (3600000ms = 1 óra, 60000ms = 1 perc)
         const hours = Math.floor(totalMilliseconds / 3600000);
         const minutes = Math.floor((totalMilliseconds % 3600000) / 60000);
         const seconds = Math.floor((totalMilliseconds % 60000) / 1000);
         const centiseconds = Math.floor((totalMilliseconds % 1000) / 10);
 
+        // A századmásodperc mindig látszik, ezért kívül van az if-eken
         const formattedCentiseconds = `<span class="digit">${String(centiseconds).padStart(2, '0')}</span>`;
         let mainDisplayHtml = '';
+
+        // Csak annyi egységet mutatunk, amennyi tényleg kell - a "0:00:05"
+        // sokkal zsúfoltabb, mint egy sima "5"
 
         if (hours > 0) {
             // Ó:PP:MM formátum
@@ -137,49 +169,72 @@ export class Stopwatch {
             mainDisplayHtml = `<span class="digit">${seconds}</span>`;
         }
 
+        // A .time-segment-ek (":" és ".") külön span-ban vannak, mert a CSS
+        // halványabbra színezi őket, mint magukat a számjegyeket
         this.display.innerHTML = `${mainDisplayHtml}<span class="time-segment">.</span>${formattedCentiseconds}`;
     }
 }
 
 //! ======================== TIMER (visszaszámláló) ========================
 
+// CÉL: Visszaszámláló, kattintással/gépeléssel átírható számjegyekkel
 export class Timer {
+
+    /*
+        CÉL: Visszaszámláló létrehozása és bekötése
+        BE: displayElement       - a számjegyek konténere
+            progressFillElement  - a haladás-sáv kitöltő eleme
+    */
     constructor(displayElement, progressFillElement) {
         this.display = displayElement;
         this.progressFill = progressFillElement;
         this.running = false;
-        this.remainingTime = 0;
-        this.totalTime = 0;
+        this.remainingTime = 0; // hátralévő MÁSODPERC (nem ms, mint a stoppernél!)
+        this.totalTime = 0;     // a beállított teljes hossz - ehhez képest telik a sáv
         this.interval = null;
         // Melyik szegmens (óra/perc/mp) van "felfegyverezve" gépelésre egy
         // kattintás után, és az az óta begépelt nyers számjegyek — lásd
         // handleUnitClick()/handleUnitInput() lentebb.
-        this.activeUnit = null;
-        this.editBuffer = '';
+        this.activeUnit = null;  // 'hours' | 'minutes' | 'seconds' | null
+        this.editBuffer = '';    // az eddig begépelt nyers számjegyek
+
+        //? Riasztás-állapot
         this.alarmAudio = null;
         this.alarmInterval = null;
         this.isAlarmRinging = false;
-        this.finishedWhileAway = false;
+        this.finishedWhileAway = false; // csukott fül mellett járt-e le
+
+        // tabindex="0" nélkül egy <div> nem kaphatna fókuszt, és nem
+        // kapnánk meg rajta a keydown eseményeket
         this.display.setAttribute('tabindex', '0');
 
         this.display.addEventListener('click', (e) => this.handleUnitClick(e));
 
         this.display.addEventListener('keydown', (e) => {
+
+            // Futás közben, vagy ha nincs kijelölt szegmens, semmit nem engedünk
             if (this.running || !this.activeUnit) {
                 e.preventDefault();
                 return;
             }
+
             if (/[0-9]/.test(e.key)) {
+                //? Számjegy -> hozzáfűzés a pufferhez
                 e.preventDefault();
                 this.handleUnitInput(e.key);
             } else if (e.key === 'Backspace') {
+                //? Visszatörlés -> az utolsó számjegy levágása
                 e.preventDefault();
                 this.editBuffer = this.editBuffer.slice(0, -1);
+                // Üres pufferből 0 lesz, nem NaN
                 this.applyUnitEdit(this.activeUnit, this.editBuffer ? parseInt(this.editBuffer, 10) : 0);
             } else if (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Tab') {
+                //? Kilépés a szerkesztésből (a Tabot is elkapjuk, hogy ne ugorjon tovább)
                 e.preventDefault();
                 this.exitUnitEdit();
             } else {
+                // Minden egyéb billentyű elnyelve - a kijelzőbe ne lehessen
+                // betűt vagy bármi mást belegépelni
                 e.preventDefault();
             }
         });
@@ -199,13 +254,18 @@ export class Timer {
         if (this.running) {
             this.resumeCountdown(); // saját maga állítja be a this.running = true-t
         } else if (this.finishedWhileAway) {
+            // Csak a vizuális "kész" állapot, hang NÉLKÜL - lásd loadState()
             this.display.classList.add('finished');
         }
     }
 
     // CÉL: A riasztáshoz szükséges Web Audio API kontextus létrehozása
     initAlarm() {
+        // A webkit- előtag a régebbi Safari kedvéért kell
         const AudioContext = window.AudioContext || window.webkitAudioContext;
+
+        // Ha a böngésző nem ismeri, a this.audioContext undefined marad,
+        // és a playAlarmSound() csendben nem csinál semmit
         if (AudioContext) {
             this.audioContext = new AudioContext();
         }
@@ -217,10 +277,10 @@ export class Timer {
            hallható Google-szerű hangzással
     */
     playAlarmSound() {
-        if (!this.audioContext) return;
+        if (!this.audioContext) return; // nincs hangtámogatás -> néma marad
 
-        const duration = 0.15;
-        const frequency1 = 880; // A5 hang
+        const duration = 0.15;     // egy csippenés hossza másodpercben
+        const frequency1 = 880;    // A5 hang
         const frequency2 = 1046.5; // C6 hang
 
         // Első hang lejátszása, hangosabb hangerővel
@@ -243,6 +303,7 @@ export class Timer {
 
         // A második hang kicsit később, szintén hangosabb hangerővel
         setTimeout(() => {
+            // Közben lehet, hogy leállították a riasztást -> ne szóljon bele
             if (!this.isAlarmRinging) return;
 
             const oscillator2 = this.audioContext.createOscillator();
@@ -261,12 +322,12 @@ export class Timer {
 
             oscillator2.start(this.audioContext.currentTime);
             oscillator2.stop(this.audioContext.currentTime + duration);
-        }, 150);
+        }, 150); // 150ms késleltetés -> a két hang "csip-csip"-ként hallatszik
     }
 
     // CÉL: A riasztás elindítása (azonnali hang, majd másodpercenként ismétlődik, amíg le nem állítják)
     startAlarm() {
-        if (this.isAlarmRinging) return;
+        if (this.isAlarmRinging) return; // már szól -> ne indítsunk másodikat
 
         this.isAlarmRinging = true;
         this.display.classList.add('finished');
@@ -284,12 +345,14 @@ export class Timer {
 
     // CÉL: A riasztás leállítása
     stopAlarm() {
-        this.isAlarmRinging = false;
+        this.isAlarmRinging = false; // ezt látja a playAlarmSound() késleltetett fele is
+
         if (this.alarmInterval) {
             clearInterval(this.alarmInterval);
             this.alarmInterval = null;
         }
-        this.display.classList.remove('finished');
+
+        this.display.classList.remove('finished'); // a piros kiemelés is eltűnik
     }
 
     /*
@@ -304,14 +367,18 @@ export class Timer {
         try {
             const raw = localStorage.getItem(TIMER_STATE_KEY);
             if (!raw) return;
+
             const state = JSON.parse(raw);
             this.totalTime = state.totalTime || 0;
             this.remainingTime = state.remainingTime || 0;
             this.running = !!state.running;
 
             if (this.running && typeof state.endsAt === 'number') {
+                // A végidőpontból számoljuk vissza, mennyi maradt VALÓJÁBAN
                 const secondsLeft = Math.ceil((state.endsAt - Date.now()) / 1000);
+
                 if (secondsLeft > 0) {
+                    // Még van hátra -> egyszerűen folytatjuk
                     this.remainingTime = secondsLeft;
                 } else {
                     // A fül bezárása közben ért véget. Mutassuk a "kész"
@@ -334,6 +401,8 @@ export class Timer {
             totalTime: this.totalTime,
             remainingTime: this.remainingTime,
             running: this.running,
+            // A horgony itt a VÉGE (a stoppernél az eleje volt) - *1000,
+            // mert a remainingTime másodpercben van, a Date.now() ms-ben
             endsAt: this.running ? Date.now() + this.remainingTime * 1000 : null
         }));
     }
@@ -342,10 +411,13 @@ export class Timer {
     resumeCountdown() {
         this.running = true;
         this.display.classList.add('running');
+
         this.interval = setInterval(() => {
+            // Elő-dekrementálás: előbb csökkent, és a MÁR csökkentett
+            // értéket hasonlítja össze - így pontosan a 0-nál csenget
             if (--this.remainingTime <= 0) {
-                this.stop();
-                this.remainingTime = 0;
+                this.stop();            // ez a saveState()-et is elvégzi
+                this.remainingTime = 0; // negatívba ne csússzon
                 this.startAlarm();
             }
             this.updateDisplayFromSeconds();
@@ -354,9 +426,10 @@ export class Timer {
 
     // CÉL: Indítás (csak akkor, ha van hátralévő idő, és még nem fut)
     start() {
+        // 0-ról nem indulunk el: előbb be kell állítani valamennyi időt
         if (this.remainingTime > 0 && !this.running) {
-            this.resumeCountdown();
-            this.saveState();
+            this.resumeCountdown(); // ez állítja be a running-ot...
+            this.saveState();       // ...ezért csak UTÁNA mentünk
         }
     }
 
@@ -387,16 +460,20 @@ export class Timer {
     // CÉL: A visszaszámlálás beállítása egy adott másodpercértékre (pld. beírt idő alapján)
     setTime(seconds) {
         this.remainingTime = seconds;
-        this.totalTime = seconds;
+        this.totalTime = seconds; // az új érték lesz a 100% a haladás-sávon
         this.saveState();
         this.updateDisplayFromSeconds();
     }
 
     // CÉL: A kijelző (óó:pp:mm) és a haladás-sáv frissítése a hátralévő másodpercek alapján
     updateDisplayFromSeconds() {
+        // Itt másodpercből bontunk (3600 = 1 óra), nem ms-ből, mint a stoppernél
         const hours = Math.floor(this.remainingTime / 3600);
         const minutes = Math.floor((this.remainingTime % 3600) / 60);
         const seconds = this.remainingTime % 60;
+
+        // CÉL: Egy számjegypár markupja. Az .editing osztály jelöli, melyik
+        // szegmens van épp "felfegyverezve" gépelésre
         const digitSpan = (unit, value) => {
             const editing = this.activeUnit === unit ? ' editing' : '';
             return `<span class="digit ${unit}${editing}">${String(value).padStart(2, '0')}</span>`;
@@ -407,6 +484,7 @@ export class Timer {
             digitSpan('minutes', minutes) +
             '<span class="time-segment">:</span>' +
             digitSpan('seconds', seconds);
+        //? Haladás-sáv: az ELTELT részt mutatja, a totalTime-hoz viszonyítva
         if (this.progressFill) {
             const elapsedFraction = this.totalTime > 0 ? 1 - (this.remainingTime / this.totalTime) : 0;
             this.progressFill.style.width = `${elapsedFraction * 100}%`;
@@ -420,8 +498,13 @@ export class Timer {
         hogy a nem-kattintott mértékegységekhez hozzányúlna
     */
     handleUnitClick(e) {
-        if (this.running) return;
+        if (this.running) return; // menet közben nem lehet átírni
+
+        // A .closest() felfelé keres a DOM-fában: akkor is megtalálja a
+        // .digit-et, ha a kattintás egy azon belüli elemre esett
         const digitEl = e.target.closest('.digit');
+
+        // Melyik a három közül? (a kettőspontokra kattintva egyik sem)
         const unit = ['hours', 'minutes', 'seconds'].find((u) => digitEl?.classList.contains(u));
         if (!unit) return;
         // Itt meg kell állni, MIELŐTT a lenti updateDisplayFromSeconds()
@@ -436,6 +519,8 @@ export class Timer {
 
     // CÉL: Egy begépelt számjegy hozzáfűzése a szerkesztő pufferhez, majd alkalmazása
     handleUnitInput(digit) {
+        // A slice(-3) az UTOLSÓ 3 karaktert tartja meg: így folyamatosan
+        // gépelve a régi számjegyek szépen "kicsordulnak" balra
         this.editBuffer = (this.editBuffer + digit).slice(-3);
         this.applyUnitEdit(this.activeUnit, parseInt(this.editBuffer, 10));
     }
@@ -453,10 +538,13 @@ export class Timer {
         egyszerűen levágná (clamp)
     */
     applyUnitEdit(unit, value) {
+        // Kiindulunk a jelenlegi értékekből, és csak a szerkesztettet írjuk át
         let hours = Math.floor(this.remainingTime / 3600);
         let minutes = Math.floor((this.remainingTime % 3600) / 60);
         let seconds = this.remainingTime % 60;
 
+        // A túlcsordulást nem levágjuk, hanem ÁTVISSZÜK a nagyobb egységbe:
+        // pld. 90 másodpercből 1 perc 30 másodperc lesz
         if (unit === 'seconds') {
             seconds = value % 60;
             minutes += Math.floor(value / 60);
@@ -464,14 +552,17 @@ export class Timer {
             minutes = value % 60;
             hours += Math.floor(value / 60);
         } else {
-            hours = value;
+            hours = value; // az óra fölött már nincs nagyobb egység
         }
+
+        // Második átvitel: a fenti lépés a perceket is túlcsordíthatta
         hours += Math.floor(minutes / 60);
         minutes = minutes % 60;
-        hours = Math.min(hours, 99);
+
+        hours = Math.min(hours, 99); // itt viszont már tényleg vágunk (2 számjegy fér ki)
 
         this.remainingTime = hours * 3600 + minutes * 60 + seconds;
-        this.totalTime = this.remainingTime;
+        this.totalTime = this.remainingTime; // az új idő lesz a 100%
         this.saveState();
         this.updateDisplayFromSeconds();
     }
@@ -479,12 +570,12 @@ export class Timer {
 
 //! ======================== FÜLVÁLTÁS ÉS KÖZÖS VEZÉRLŐK ========================
 
-const ACTIVE_TOOL_KEY = 'activeTimeTool';
-const VALID_TOOLS = ['stopwatch', 'timer', 'pomodoro'];
+const ACTIVE_TOOL_KEY = 'activeTimeTool';                  // localStorage kulcs az aktív fülnek
+const VALID_TOOLS = ['stopwatch', 'timer', 'pomodoro'];    // csak ezeket fogadjuk el visszatöltéskor
 
-export let stopwatch;
-export let timer;
-export let activeTool = 'stopwatch';
+export let stopwatch;                   // a Stopwatch példány
+export let timer;                       // a Timer példány
+export let activeTool = 'stopwatch';    // melyik fül aktív épp
 
 /*
     CÉL: A Time Tools kártya bekötése
@@ -494,6 +585,9 @@ export let activeTool = 'stopwatch';
      - Az utoljára aktív fül visszaállítása localStorage-ból
 */
 export function initializeTimeTools() {
+
+    //! ---------- PÉLDÁNYOSÍTÁS ----------
+
     const stopwatchDisplay = document.querySelector('.stopwatch .display');
     stopwatch = new Stopwatch(stopwatchDisplay);
 
@@ -501,8 +595,13 @@ export function initializeTimeTools() {
     const timerProgressFill = document.getElementById('timer-progress-fill');
     timer = new Timer(timerDisplay, timerProgressFill);
 
+    // A Pomodorónak nincs osztálya, ő modul-szinten tartja az állapotát
     initPomodoroPanel();
 
+    //! ---------- KÖZÖS VEZÉRLŐK ----------
+
+    // Mindhárom fül EGY Start/Pause és EGY Reset gombon osztozik - az
+    // activeTool dönti el, melyiknek szól épp a kattintás
     const toggleButtons = document.querySelectorAll('.mode-tabs .toggle-btn');
     const startStopBtn = document.querySelector('.controls .start-stop');
     const resetBtn = document.querySelector('.controls .reset');
@@ -511,7 +610,7 @@ export function initializeTimeTools() {
     function isRunningFor(tool) {
         if (tool === 'stopwatch') return stopwatch.running;
         if (tool === 'timer') return timer.running;
-        return isPomodoroRunning();
+        return isPomodoroRunning(); // ami maradt: a Pomodoro
     }
 
     // CÉL: A Start/Pause gomb ikonjának/feliratának szinkronban tartása az aktív eszköz állapotával
@@ -519,15 +618,24 @@ export function initializeTimeTools() {
         const icon = startStopBtn.querySelector('i');
         const label = startStopBtn.querySelector('span');
         const isRunning = isRunningFor(activeTool);
+
+        // Fut -> pause ikon, áll -> play ikon
         icon.classList.toggle('fa-play', !isRunning);
         icon.classList.toggle('fa-pause', isRunning);
+
         if (label) label.textContent = isRunning ? 'Pause' : 'Start';
+
+        // A képernyőolvasók az aria-label-t mondják be, nem az ikont
         startStopBtn.setAttribute('aria-label', isRunning ? 'Pause' : 'Start');
     }
+
+    //! ---------- FÜLVÁLTÁS ----------
 
     toggleButtons.forEach(button => {
         button.addEventListener('click', () => {
             const target = button.dataset.target;
+
+            // Ugyanarra a fülre kattintva nincs teendő
             if (activeTool !== target) {
                 // Riasztás leállítása, ha timerről váltunk el
                 if (activeTool === 'timer' && timer.isAlarmRinging) {
@@ -535,22 +643,35 @@ export function initializeTimeTools() {
                 }
 
                 activeTool = target;
-                localStorage.setItem(ACTIVE_TOOL_KEY, activeTool);
+                localStorage.setItem(ACTIVE_TOOL_KEY, activeTool); // jegyezzük meg a következő indulásra
+
+                //? Fülgombok: mindenkiről le, a kattintottra rá
                 toggleButtons.forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
+
+                //? És ugyanez a három panelre
                 document.querySelector('.stopwatch').classList.toggle('active', target === 'stopwatch');
                 document.querySelector('.timer').classList.toggle('active', target === 'timer');
                 document.querySelector('.pomodoro-panel').classList.toggle('active', target === 'pomodoro');
+
+                // Egy azonnali újrarajzolás, hogy ne egy elavult érték
+                // villanjon fel a most előhúzott panelen
                 if (activeTool === 'stopwatch') {
                     stopwatch.updateDisplay();
                 } else if (activeTool === 'timer') {
                     timer.updateDisplayFromSeconds();
                 }
+                // A Pomodoro magától tickel, neki nem kell külön lökés
+
                 updateUI();
             }
         });
     });
 
+    //! ---------- START/PAUSE ÉS RESET ----------
+
+    // Mindkét gomb ugyanaz a minta: az activeTool alapján irányítjuk
+    // tovább a hívást a megfelelő eszközre
     startStopBtn.addEventListener('click', () => {
         if (activeTool === 'stopwatch') {
             if (stopwatch.running) stopwatch.stop();
@@ -579,8 +700,12 @@ export function initializeTimeTools() {
     // csendben tovább futó Timer/Pomodoro ne bújjon el egy "Stopwatch,
     // nem fut" felirat mögé, ami mást állítana
     const savedTool = localStorage.getItem(ACTIVE_TOOL_KEY);
+
+    // A VALID_TOOLS ellenőrzés véd attól, hogy egy kézzel elrontott
+    // localStorage érték nem létező panelt próbáljon megnyitni
     activeTool = VALID_TOOLS.includes(savedTool) ? savedTool : 'stopwatch';
 
+    // Ugyanaz a négy sor, mint a fülváltásnál - itt a mentett fülre alkalmazva
     toggleButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.target === activeTool));
     document.querySelector('.stopwatch').classList.toggle('active', activeTool === 'stopwatch');
     document.querySelector('.timer').classList.toggle('active', activeTool === 'timer');

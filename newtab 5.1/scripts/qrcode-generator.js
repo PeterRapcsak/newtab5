@@ -1,6 +1,6 @@
 /*======================================================================
     qrcode-generator.js - Külső (vendored) könyvtár - VÁLTOZATLAN
-------------------------------------------------------------------------
+----------------------------------------------------------------------
     MEGJEGYZÉS:
      - Ez NEM a projekt saját kódja, hanem egy MIT licencű, harmadik
        féltől származó, becsomagolt (vendored) könyvtár (lásd lent az

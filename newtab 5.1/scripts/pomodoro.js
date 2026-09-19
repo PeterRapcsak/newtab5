@@ -1,7 +1,7 @@
 /*======================================================================
     pomodoro.js - Pomodoro (munka/szünet ciklus időzítő)
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Pomodoro: munka/szünet ciklusú időzítő, a Time Tools kártya
        harmadik füleként (a Stopwatch/Timer mellett), nem önálló, lebegő
        widgetként — a timeTools.js vezérli a közös Start/Pause + Reset
@@ -17,8 +17,12 @@
        fut tovább, hacsak nincs szüneteltetve
 ======================================================================*/
 
-const STATE_KEY = 'pomodoroState';
-const TICK_MS = 250;
+//! ---------- KONSTANSOK ----------
+
+const STATE_KEY = 'pomodoroState'; // localStorage kulcs a teljes állapotnak
+const TICK_MS = 250;               // ilyen sűrűn rajzolunk újra
+// 250ms és nem 1000ms: így a másodperc-váltás sosem késik észrevehetően,
+// és a fázisvégi hangjelzés is pontosabbnak érződik
 // A hangerő-csúszka NÉGYZETESEN (nem lineárisan) skálázza a nyers gaint:
 // 100%-nál MAX_BEEP_GAIN-szeres (jóval hangosabb, mint egy sima, 1-re
 // korlátozott sinus), félúton (50%) nagyjából a régi, egyszerű gain=1
@@ -26,12 +30,15 @@ const TICK_MS = 250;
 // érezhető a különbség, nem csak a felső harmadában.
 const MAX_BEEP_GAIN = 5;
 
+// A három fázis felirata (ez jelenik meg a számláló alatt)
 const PHASE_LABELS = {
     work: 'FOCUS',
     shortBreak: 'SHORT BREAK',
     longBreak: 'LONG BREAK'
 };
 
+// Fáziskód -> szín. A munka fázis a téma saját kiemelőszínét használja,
+// a szünetek fix zöld/kék árnyalatot, hogy egy pillantásra megkülönböztethetők legyenek
 const PHASE_COLORS = {
     work: 'var(--accent-primary)',
     shortBreak: 'hsl(140 55% 55%)',
@@ -50,13 +57,16 @@ function defaultState() {
     const settings = defaultSettings();
     return {
         settings,
-        phase: 'work',
-        isRunning: false,
-        endsAt: null,
-        remainingMs: settings.workMin * 60000,
-        sessionsCompleted: 0
+        phase: 'work',                            // 'work' | 'shortBreak' | 'longBreak'
+        isRunning: false,                         // fut-e épp a visszaszámlálás
+        endsAt: null,                             // ABSZOLÚT végidőpont ms-ben (csak futás közben)
+        remainingMs: settings.workMin * 60000,    // hátralévő idő (csak megállított állapotban érvényes)
+        sessionsCompleted: 0                      // hány munkafázis telt el a hosszú szünet óta
     };
 }
+// Az endsAt / remainingMs szándékosan KÉT külön mező: futás közben az
+// abszolút végidőpont a mérvadó (ez éli túl az újratöltést), megállítva
+// pedig a "fagyasztott" hátralévő idő
 
 /*
     CÉL: Állapot betöltése localStorage-ból
@@ -67,21 +77,27 @@ function defaultState() {
 function loadState() {
     try {
         const raw = localStorage.getItem(STATE_KEY);
-        if (!raw) return defaultState();
+        if (!raw) return defaultState(); // első indítás
+
         const parsed = JSON.parse(raw);
+
+        // Kétszintű összefésülés: a settings egy beágyazott objektum, azt
+        // külön is szét kell teríteni, különben a spread felülírná az
+        // EGÉSZ settings objektumot a (esetleg hiányos) mentettel
         return {
             ...defaultState(),
             ...parsed,
             settings: { ...defaultSettings(), ...parsed.settings }
         };
     } catch {
+        // Sérült mentés -> tiszta lappal indulunk
         return defaultState();
     }
 }
 
-let state = loadState();
-let tickHandle = null;
-let audioCtx = null;
+let state = loadState();  // a modul teljes állapota, egyetlen objektumban
+let tickHandle = null;    // a futó setInterval azonosítója (null = nem tickel)
+let audioCtx = null;      // Web Audio kontextus, lustán hozzuk létre
 
 // CÉL: A jelenlegi állapot kimentése localStorage-ba
 function saveState() {
@@ -91,9 +107,9 @@ function saveState() {
 // CÉL: Egy adott fázis teljes hossza ezredmásodpercben, a beállítások alapján
 function durationMs(phase) {
     const { settings } = state;
-    if (phase === 'work') return settings.workMin * 60000;
+    if (phase === 'work') return settings.workMin * 60000;        // 60000 = 1 perc ms-ben
     if (phase === 'shortBreak') return settings.shortBreakMin * 60000;
-    return settings.longBreakMin * 60000;
+    return settings.longBreakMin * 60000; // ami maradt: 'longBreak'
 }
 
 /*
@@ -105,12 +121,17 @@ function durationMs(phase) {
 function nextPhase() {
     if (state.phase === 'work') {
         state.sessionsCompleted += 1;
+
+        // Megvolt a kör -> jár a hosszú szünet, és kezdjük elölről a számolást
         if (state.sessionsCompleted >= state.settings.sessionsUntilLong) {
             state.sessionsCompleted = 0;
             return 'longBreak';
         }
+
         return 'shortBreak';
     }
+
+    // Szünet (bármelyik) után mindig vissza a munkához
     return 'work';
 }
 
@@ -128,25 +149,41 @@ function nextPhase() {
        felhasználó húzza a csúszkát
 */
 function playChime(volumePercent) {
+    // A fordított feltétel (nem "<= 0") a NaN-t is kiszűri
     if (!(volumePercent > 0)) return;
+
     try {
+        // Lusta létrehozás: a böngészők amúgy sem engednek AudioContext-et
+        // felhasználói interakció előtt. A webkit- prefix a régebbi Safarihoz kell
         audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+
+        // Négyzetes skálázás - lásd a MAX_BEEP_GAIN melletti magyarázatot
         const peakGain = MAX_BEEP_GAIN * (volumePercent / 100) ** 2;
         const now = audioCtx.currentTime;
 
+        // A kompresszor fogja vissza az 1 fölötti gaint, hogy ne recsegjen
         const compressor = audioCtx.createDynamicsCompressor();
         compressor.connect(audioCtx.destination);
 
+        // Két csippenés: az első azonnal, a második 0.45 másodperccel később
         [0, 0.45].forEach((offset) => {
             const start = now + offset;
-            const osc = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.frequency.value = 880;
+
+            const osc = audioCtx.createOscillator(); // hangforrás
+            const gain = audioCtx.createGain();      // burkológörbe (hangerő-borítékolás)
+
+            osc.frequency.value = 880; // A5 hang
             osc.connect(gain);
             gain.connect(compressor);
+
+            // Burkológörbe: (majdnem) nulláról gyors felfutás, majd lecsengés.
+            // Azért 0.0001 és nem 0, mert az exponenciális rámpa 0-val
+            // matematikailag értelmezhetetlen (és a böngésző dobna is érte)
             gain.gain.setValueAtTime(0.0001, start);
-            gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.02);
-            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);
+            gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.02); // attack
+            gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4);    // release
+
+            // Az oszcillátor egyszer használatos: indul, leáll, és eldobható
             osc.start(start);
             osc.stop(start + 0.4);
         });
@@ -168,20 +205,28 @@ function playBeep() {
     fázist lejátszana, ami közben ELVILEG eltelt volna
 */
 function catchUp() {
-    if (!state.isRunning || state.endsAt === null) return;
-    if (Date.now() < state.endsAt) return;
+    if (!state.isRunning || state.endsAt === null) return; // áll -> nincs mit pótolni
+    if (Date.now() < state.endsAt) return;                 // még nem járt le
 
+    // EGYET lépünk, nem while-lal pörgetjük végig az összes közben eltelt
+    // fázist: ha valaki 3 nap után nyitja vissza a fület, nem akarunk 200
+    // fázisváltást (és 200 csippenést) lejátszani neki
     state.phase = nextPhase();
     state.endsAt = Date.now() + durationMs(state.phase);
+
     saveState();
     playBeep();
 }
 
 // CÉL: A hátralévő idő kiszámítása (ezredmásodpercben), futás közben az endsAt horgonyból
 function remainingMs() {
+    // Futás közben MINDIG frissen számoljuk - így nem tud elcsúszni akkor
+    // sem, ha a böngésző háttérben visszafogta a timereket
     if (state.isRunning && state.endsAt !== null) {
-        return Math.max(0, state.endsAt - Date.now());
+        return Math.max(0, state.endsAt - Date.now()); // negatívba ne mehessen
     }
+
+    // Megállított állapotban a befagyasztott érték a mérvadó
     return state.remainingMs;
 }
 
@@ -192,6 +237,8 @@ function remainingMs() {
        tompított kettőspont), ne csak a betűtípusuk egyezzen
 */
 function formatTime(ms) {
+    // Ceil és nem floor: így a "0:01" csak akkor vált "0:00"-ra, amikor
+    // az utolsó másodperc tényleg letelt, nem egy másodperccel előbb
     const totalSeconds = Math.ceil(ms / 1000);
     const m = Math.floor(totalSeconds / 60);
     const s = totalSeconds % 60;
@@ -212,16 +259,19 @@ function getEls() {
 // CÉL: A kijelzés (hátralévő idő, fázis felirat/szín, haladás-sáv) frissítése az aktuális állapot alapján
 function render() {
     const els = getEls();
-    if (!els.time) return;
+    if (!els.time) return; // nincs kirajzolva a panel -> nincs mit frissíteni
 
     const total = durationMs(state.phase);
     const remaining = remainingMs();
+
+    // A total > 0 ellenőrzés a 0-val osztást zárja ki
     const remainingFraction = total > 0 ? remaining / total : 0;
 
-    els.time.innerHTML = formatTime(remaining);
+    els.time.innerHTML = formatTime(remaining); // innerHTML, mert a formatTime markupot ad
     els.phase.textContent = PHASE_LABELS[state.phase];
     els.phase.style.color = PHASE_COLORS[state.phase];
 
+    // A sáv az ELTELT részt mutatja, ezért az (1 - hátralévő arány)
     els.progressFill.style.width = `${(1 - remainingFraction) * 100}%`;
 }
 
@@ -233,9 +283,12 @@ function tick() {
 
 // CÉL: Az ismétlődő tick-elés elindítása (ha még nem fut)
 function startTicking() {
-    if (tickHandle) return;
+    if (tickHandle) return; // már megy -> nehogy két intervallum fusson egyszerre
     tickHandle = setInterval(tick, TICK_MS);
 }
+// Megjegyzés: szándékosan nincs stopTicking(). A tick olcsó, viszont
+// megállított állapotban is látnunk kell, ha közben a beállítások
+// változnak - így egyszerűbb végig futni hagyni
 
 //! ---------- VEZÉRLÉS (timeTools.js hívja) ----------
 
@@ -251,13 +304,16 @@ export function isPomodoroRunning() {
 */
 export function toggleRunning() {
     if (state.isRunning) {
-        state.remainingMs = remainingMs();
+        //? MEGÁLLÍTÁS: az abszolút végidőpontot "befagyasztjuk" hátralévő idővé
+        state.remainingMs = remainingMs(); // FONTOS: még az isRunning átállítása ELŐTT
         state.isRunning = false;
         state.endsAt = null;
     } else {
+        //? INDÍTÁS: a hátralévő időből új abszolút végidőpont
         state.endsAt = Date.now() + state.remainingMs;
         state.isRunning = true;
     }
+
     saveState();
     render();
 }
@@ -265,10 +321,11 @@ export function toggleRunning() {
 // CÉL: Teljes nullázás — vissza az első munka-fázisra, megállítva
 export function resetTimer() {
     state.phase = 'work';
-    state.sessionsCompleted = 0;
+    state.sessionsCompleted = 0; // a hosszú szünetig tartó számláló is nullázódik
     state.isRunning = false;
     state.endsAt = null;
     state.remainingMs = durationMs('work');
+
     saveState();
     render();
 }
@@ -276,14 +333,14 @@ export function resetTimer() {
 // ---------------------------------------------------------------------
 // Beállítások popover (ugyanaz a "chrome", mint a shortcuts.js szerkesztő popoverje)
 // ---------------------------------------------------------------------
-let settingsPopoverEl = null;
+let settingsPopoverEl = null; // lustán létrehozott popover, egy példány az egész laphoz
 
 /*
     CÉL: A beállítások popover létrehozása (csak első hívásra), vagy a
     már meglévő visszaadása
 */
 function getSettingsPopover() {
-    if (settingsPopoverEl) return settingsPopoverEl;
+    if (settingsPopoverEl) return settingsPopoverEl; // már felépítettük
 
     settingsPopoverEl = document.createElement('div');
     settingsPopoverEl.className = 'edit-shortcut-popover pomodoro-settings-popover glass-card';
@@ -300,19 +357,29 @@ function getSettingsPopover() {
             <button type="button" class="pomodoro-settings-save btn-primary">Save</button>
         </div>
     `;
+    // A <body> közvetlen gyereke, hogy semmilyen szülő overflow/transform
+    // ne vágja el, és a képernyőhöz képest lehessen pozicionálni
     document.body.appendChild(settingsPopoverEl);
 
+    // A panelen BELÜLI kattintás ne buborékoljon fel a "kattintás kívülre"
+    // kezelőhöz, mert az egyből be is csukná a popovert
     settingsPopoverEl.addEventListener('click', (e) => e.stopPropagation());
+
+    //? Gombok bekötése
     settingsPopoverEl.querySelector('.pomodoro-settings-cancel').addEventListener('click', closeSettingsPopover);
     settingsPopoverEl.querySelector('.pomodoro-settings-save').addEventListener('click', saveSettings);
+    // A "Reset" csak a MEZŐKET tölti fel az alapértékekkel - a mentéshez
+    // utána még a Save-et is meg kell nyomni
     settingsPopoverEl.querySelector('.pomodoro-settings-defaults').addEventListener('click', () => fillSettingsForm(defaultSettings()));
 
+    //? Hangerő-csúszka: két külön esemény, két külön célra
     const volumeInput = settingsPopoverEl.querySelector('.pomodoro-input-volume');
-    volumeInput.addEventListener('input', () => updateVolumeLabel(settingsPopoverEl));
-    volumeInput.addEventListener('change', () => playChime(Number(volumeInput.value)));
+    volumeInput.addEventListener('input', () => updateVolumeLabel(settingsPopoverEl)); // húzás közben: csak a felirat
+    volumeInput.addEventListener('change', () => playChime(Number(volumeInput.value))); // elengedéskor: előhallgatás
 
+    //? Billentyűzet: Enter = mentés, Escape = mégse
     settingsPopoverEl.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); saveSettings(); }
+        if (e.key === 'Enter') { e.preventDefault(); saveSettings(); } // preventDefault: ne submitoljon
         else if (e.key === 'Escape') closeSettingsPopover();
     });
 
@@ -326,20 +393,28 @@ function closeSettingsPopover() {
 
 // CÉL: A popover pozicionálása a kattintás helyéhez, képernyőszélen túllógás elkerülésével
 function positionPopover(popover, clickEvent) {
-    const margin = 12;
+    const margin = 12; // ennyi hely maradjon a képernyő széléig
+
+    // Első körben egyszerűen a kurzorhoz tesszük
     popover.style.left = `${clickEvent.clientX}px`;
     popover.style.top = `${clickEvent.clientY}px`;
 
+    // A méretét csak a következő képkockában tudjuk megkérdezni, amikor
+    // a böngésző már kirajzolta -> akkor korrigálunk, ha kilógna
     requestAnimationFrame(() => {
         const rect = popover.getBoundingClientRect();
         let left = clickEvent.clientX;
         let top = clickEvent.clientY;
 
+        // Jobbra kilóg -> pont annyival toljuk vissza balra
         const overflowRight = rect.right - (window.innerWidth - margin);
         if (overflowRight > 0) left -= overflowRight;
+
+        // Lefelé kilóg -> nem csúsztatjuk, hanem átfordítjuk a kurzor FÖLÉ
         const overflowBottom = rect.bottom - (window.innerHeight - margin);
         if (overflowBottom > 0) top -= rect.height + 24; // felfelé "átbillentve" a kurzor fölé
 
+        // A Math.max gondoskodik róla, hogy a bal/felső szélen se lógjon ki
         popover.style.left = `${Math.max(margin, left)}px`;
         popover.style.top = `${Math.max(margin, top)}px`;
     });
@@ -364,10 +439,10 @@ function fillSettingsForm(settings) {
 // CÉL: A beállítások popover megnyitása, a jelenlegi állapot értékeivel feltöltve
 function openSettingsPopover(clickEvent) {
     const popover = getSettingsPopover();
-    fillSettingsForm(state.settings);
-    popover.classList.add('open');
-    positionPopover(popover, clickEvent);
-    popover.querySelector('.pomodoro-input-work').focus();
+    fillSettingsForm(state.settings);       // friss értékek a mezőkbe
+    popover.classList.add('open');          // láthatóvá tesszük...
+    positionPopover(popover, clickEvent);   // ...és csak utána mérjük/pozicionáljuk
+    popover.querySelector('.pomodoro-input-work').focus(); // egyből gépelhessen
 }
 
 /*
@@ -383,16 +458,26 @@ function openSettingsPopover(clickEvent) {
 */
 function applySettings(settings) {
     const { workMin, shortBreakMin, longBreakMin, sessionsUntilLong, volume } = settings;
+
+    // A négy hossz/darabszám mind pozitív egész kell legyen.
+    // A Number.isFinite() a NaN-t ÉS a végtelent is kiszűri
     if ([workMin, shortBreakMin, longBreakMin, sessionsUntilLong].some((n) => !Number.isFinite(n) || n < 1)) {
         return false;
     }
+
+    // A hangerő viszont lehet 0 is (néma), ezért kap külön ellenőrzést
     if (!Number.isFinite(volume) || volume < 0 || volume > 100) {
         return false;
     }
 
     state.settings = { workMin, shortBreakMin, longBreakMin, sessionsUntilLong, volume };
+
+    // Az aktuális fázis frissen újraindul az új hosszal (lásd MEGJEGYZÉS)
     state.remainingMs = durationMs(state.phase);
+
+    // Ha épp futott, a végidőpontot is újra kell horgonyozni
     if (state.isRunning) state.endsAt = Date.now() + state.remainingMs;
+
     saveState();
     render();
     return true;
@@ -401,6 +486,9 @@ function applySettings(settings) {
 // CÉL: A popover mezőiből beállítások összeállítása, validálása és mentése
 function saveSettings() {
     const popover = getSettingsPopover();
+
+    // A 10-es számrendszer megadása a parseInt-nél nem stílus, hanem
+    // biztonság: enélkül a "08"-at régebben 0-nak olvasta volna
     const settings = {
         workMin: parseInt(popover.querySelector('.pomodoro-input-work').value, 10),
         shortBreakMin: parseInt(popover.querySelector('.pomodoro-input-short').value, 10),
@@ -409,10 +497,13 @@ function saveSettings() {
         volume: parseInt(popover.querySelector('.pomodoro-input-volume').value, 10)
     };
 
+    // Csak akkor csukjuk be, ha tényleg sikerült elmenteni - így a
+    // felhasználó nem veszíti el, amit beírt
     if (!applySettings(settings)) {
         alert('Please enter valid positive numbers.');
         return;
     }
+
     closeSettingsPopover();
 }
 
@@ -423,11 +514,13 @@ function saveSettings() {
        ne maradjanak csendben a régi böngészőn/profilon
 */
 export function getPomodoroSettings() {
-    return { ...state.settings };
+    return { ...state.settings }; // MÁSOLAT, hogy kívülről ne lehessen belepiszkálni
 }
 
 // CÉL: Beállítások alkalmazása kívülről (Import All), hiányzó mezők pótlása az alapértelmezettel
 export function setPomodoroSettings(settings) {
+    // Az alapértelmezettre terítjük rá a kapottat -> egy hiányos
+    // (pld. régebbi verzióból származó) import sem okoz undefined mezőt
     applySettings({ ...defaultSettings(), ...settings });
 }
 
@@ -445,14 +538,15 @@ document.addEventListener('click', (e) => {
 */
 export function initPomodoroPanel() {
     const els = getEls();
-    if (!els.time) return;
+    if (!els.time) return; // nincs Pomodoro panel a lapon
 
-    catchUp();
-    render();
-    startTicking();
+    catchUp();      // pótoljuk, ami a fül bezárása alatt történt
+    render();       // egyszer azonnal rajzolunk, hogy ne villanjon üresen
+    startTicking(); // és innentől megy magától
 
+    // Az optional chaining (?.) miatt nem baj, ha a gomb történetesen nincs meg
     document.getElementById('pomodoro-settings-btn')?.addEventListener('click', (e) => {
-        e.stopPropagation();
+        e.stopPropagation(); // ne zárja be egyből a "kattintás kívülre" kezelő
         openSettingsPopover(e);
     });
 }

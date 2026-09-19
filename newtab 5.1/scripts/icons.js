@@ -1,7 +1,7 @@
 /*======================================================================
     icons.js - Shortcut- és bottom bar-ikonok feloldása
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Egy adott URL-hez és névhez a lehető "legvalódibb" ikon
        megkeresése, cache-elése és egy <img> elemre való rákötése
     HÁTTÉR:
@@ -20,6 +20,8 @@
 
 //! ---------- KONSTANSOK / ADATOK ----------
 
+// A Google saját, márkaikonokat kiszolgáló CDN-je - a lenti fájlnevek
+// mind erre a prefixre épülnek rá
 const BASE_ICON_URL = "https://www.gstatic.com/images/branding/product/1x/";
 
 // Google szolgáltatásokhoz kézzel válogatott, "hivatalos" ikonok
@@ -74,6 +76,8 @@ const AVATAR_PALETTE = [
 ];
 
 const ICON_CACHE_KEY = 'iconCacheV1'; // localStorage kulcs a cache-elt ikonokhoz
+// A "V1" utótag szándékos: ha a jövőben változna a cache formátuma, elég
+// V2-re írni, és a régi (inkompatibilis) bejegyzések automatikusan kiesnek
 
 //! ---------- SEGÉDFÜGGVÉNYEK ----------
 
@@ -85,6 +89,8 @@ function parseUrl(url) {
     try {
         return new URL(url);
     } catch {
+        // A URL konstruktor dob, ha a string nem értelmezhető - ezt itt
+        // MINDEN esetben elnyeljük, a hívó a null-ból tudja, hogy baj van
         return null;
     }
 }
@@ -95,8 +101,10 @@ function parseUrl(url) {
 */
 function loadIconCache() {
     try {
+        // A || '{}' a "még soha nem mentettünk" esetet fedi le
         return JSON.parse(localStorage.getItem(ICON_CACHE_KEY) || '{}');
     } catch {
+        // Sérült JSON -> inkább induljunk üresen, mint hogy elszálljunk
         return {};
     }
 }
@@ -110,16 +118,21 @@ function loadIconCache() {
     KI: data URI string, vagy null, ha nincs cache-elve
 */
 export function getCachedIconUrl(url) {
-    return loadIconCache()[url] || null;
+    return loadIconCache()[url] || null; // nincs bejegyzés -> null, nem undefined
 }
 
 // CÉL: Egy URL-hez tartozó ikon elmentése a cache-be
 export function setCachedIconUrl(url, dataUri) {
+    // Mindig frissen olvassuk be, hogy ne írjunk felül egy közben
+    // (másik fülön) beírt bejegyzést
     const cache = loadIconCache();
     cache[url] = dataUri;
+
     try {
         localStorage.setItem(ICON_CACHE_KEY, JSON.stringify(cache));
     } catch (e) {
+        // A localStorage kvótája véges (kb. 5 MB), és a data URI-k nagyok ->
+        // ez reális hiba, ezért nem némán nyeljük el
         console.error('Icon cache write failed (storage full?)', e);
     }
 }
@@ -138,14 +151,21 @@ export function clearIconCache() {
 */
 function hashString(str) {
     let hash = 0;
+
+    // Klasszikus 31-es szorzós hash (ua. az elv, mint a Java String.hashCode-ban)
     for (let i = 0; i < str.length; i++) {
+        // A >>> 0 előjel nélküli 32 bites egésszé alakít -> nem lesz negatív
+        // szám, amivel utána a % operátor rossz indexet adna
         hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
     }
+
     return hash;
 }
 
 // CÉL: XML-ben (itt: SVG-ben) veszélyes karakterek escape-elése
 function escapeXml(str) {
+    // A replace 2. paramétere lehet függvény is: minden találatra lefut,
+    // és a visszaadott stringre cseréli a karaktert
     return str.replace(/[&<>"']/g, (c) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;',
     }[c]));
@@ -163,9 +183,17 @@ function escapeXml(str) {
 */
 export function getPrimaryIconUrl(url) {
     const parsed = parseUrl(url);
-    if (!parsed) return null;
+    if (!parsed) return null; // értelmezhetetlen URL -> a hívó majd avatart rak
+
+    //? 1. Kézzel felvett kivétel?
     if (SPECIAL_ICONS[parsed.hostname]) return SPECIAL_ICONS[parsed.hostname];
+
+    //? 2. Ismert Google szolgáltatás?
     if (GOOGLE_SERVICE_ICONS[parsed.hostname]) return BASE_ICON_URL + GOOGLE_SERVICE_ICONS[parsed.hostname];
+
+    //? 3. Különben: az oldal saját gyökér-faviconja
+    // Az .origin a protokollt, a hostot ÉS a portot is tartalmazza -
+    // pont ezért működik a http://192.168.0.5:8096 típusú belső címekre is
     return `${parsed.origin}/favicon.ico`;
 }
 
@@ -176,6 +204,9 @@ export function getPrimaryIconUrl(url) {
 */
 export function getSecondaryIconUrl(url) {
     const parsed = parseUrl(url);
+
+    // Csak a hostname megy át, a teljes URL nem - nem akarjuk, hogy a
+    // shortcut-jaink útvonalai kiszivárogjanak egy külső szolgáltatáshoz
     return parsed ? `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(parsed.hostname)}` : null;
 }
 
@@ -186,13 +217,22 @@ export function getSecondaryIconUrl(url) {
 */
 export function getLetterAvatarUrl(label) {
     const text = (label || '').trim();
+
+    // Array.from() és nem text[0]: így az emoji / többjegyű (surrogate pair)
+    // karakterek sem törnek félbe. Üres név esetén marad a "?"
     const letter = escapeXml((Array.from(text)[0] || '?').toUpperCase());
+
+    // Ugyanahhoz a névhez MINDIG ugyanaz a szín tartozzon (kisbetűsítve
+    // hasheljük, hogy a "GitHub" és a "github" se lógjon szét)
     const color = AVATAR_PALETTE[hashString(text.toLowerCase()) % AVATAR_PALETTE.length];
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">`
         + `<rect width="64" height="64" rx="16" fill="${color}"/>`
         + `<text x="32" y="34" font-family="Inter,system-ui,sans-serif" font-size="28" `
         + `font-weight="600" fill="#fff" text-anchor="middle" dominant-baseline="central">${letter}</text>`
         + `</svg>`;
+
+    // encodeURIComponent, mert a nyers SVG-ben lévő #, <, > karakterek
+    // elrontanák a data URI-t
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
@@ -207,6 +247,8 @@ export function getLetterAvatarUrl(label) {
      - Elemenként egyszer kell meghívni, közvetlenül a létrehozása után
 */
 export function applyIcon(imgElement, url, label) {
+
+    //? 0. lépés: van-e véglegesen elmentett ikonunk?
     const cached = getCachedIconUrl(url);
     if (cached) {
         // Van végleges cache -> nincs szükség a fallback láncra
@@ -215,6 +257,8 @@ export function applyIcon(imgElement, url, label) {
         return;
     }
 
+    // Az avatart előre kiszámoljuk, mert több ágon is szükség lehet rá
+    // (és úgyis olcsó: nincs benne hálózat, csak string-összefűzés)
     const primary = getPrimaryIconUrl(url);
     const avatar = getLetterAvatarUrl(label);
 
@@ -226,6 +270,11 @@ export function applyIcon(imgElement, url, label) {
     }
 
     const secondary = getSecondaryIconUrl(url);
+
+    // A lánc onerror-okkal van egymásba ágyazva: minden szint a SAJÁT
+    // hibakezelőjét cseréli le a következő lépésre, mielőtt új src-t adna.
+    // Az utolsó lépésnél az onerror = null fontos, különben egy hibás
+    // avatar végtelen ciklusba vinné a dolgot.
     imgElement.src = primary;
     imgElement.onerror = () => {
         // Az elsődleges (favicon.ico) nem töltött be -> jöhet a lánc második eleme
@@ -237,6 +286,7 @@ export function applyIcon(imgElement, url, label) {
             };
             imgElement.src = secondary;
         } else {
+            // Nem is volt másodlagos jelölt -> egyből az avatar
             imgElement.onerror = null;
             imgElement.src = avatar;
         }

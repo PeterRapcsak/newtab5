@@ -1,7 +1,7 @@
 /*======================================================================
     themeCustomizer.js - Téma testreszabó panel
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - A fogaskerék-ikon mögötti panel felépítése: színtéma-választó
        (33 beépített téma, család/tónus szerint csoportosítva),
        "Low Detail Mode" kapcsoló, és a "Refresh Icons" gomb
@@ -19,6 +19,9 @@ import { refreshAllIcons } from './iconRefresh.js';
 import { renderShortcuts } from './shortcuts.js';
 import { renderBottomBar } from './bottomBar.js';
 
+// A renderShortcuts/renderBottomBar azért kell ide, mert az ikonok
+// frissítése után újra ki kell rajzolni azt a két listát az új ikonokkal
+
 /*
     CÉL: A téma testreszabó panel (gombbal együtt) felépítése és bekötése
      - Panel HTML felépítése (beállítások oszlop + színválasztó oszlop)
@@ -26,8 +29,10 @@ import { renderBottomBar } from './bottomBar.js';
      - Refresh Icons, panel nyitás/zárás, témaválasztás eseménykezelői
 */
 export function initializeThemeCustomizer() {
+
+    // A fix, jobb alsó gombcsoport - ide kerül majd a fogaskerék is
     const pageControls = document.getElementById('page-controls');
-    if (!pageControls) return;
+    if (!pageControls) return; // nincs hova tenni -> nincs mit csinálni
 
     //! ---------- PANEL FELÉPÍTÉSE (HTML sablon) ----------
 
@@ -152,36 +157,48 @@ export function initializeThemeCustomizer() {
         </div>
     `;
 
+    //! ---------- FOGASKERÉK GOMB ÉS BEILLESZTÉS ----------
+
     // Fogaskerék ikongomb létrehozása
+    // (a Font Awesome-ból jön az ikon, lásd index.html)
     const gearButton = document.createElement('button');
     gearButton.className = 'theme-toggle-btn';
     gearButton.innerHTML = '<i class="fas fa-cog"></i>';
     gearButton.title = 'Customize Theme';
 
     // Wrapper létrehozása a pozicionáláshoz
+    // A panel a CSS-ben abszolút pozicionált, ezért kell köré egy
+    // relative wrapper, amihez képest a gomb FÖLÉ tud kinyílni
     const themeWrapper = document.createElement('div');
     themeWrapper.className = 'theme-wrapper';
-    themeWrapper.appendChild(customizerPanel);
-    themeWrapper.appendChild(gearButton);
+    themeWrapper.appendChild(customizerPanel); // előbb a panel...
+    themeWrapper.appendChild(gearButton);      // ...és utána a gomb (így a gomb van felül)
 
     // A fix, jobb alsó gombcsoportban él, az Edit gomb mellett
     pageControls.appendChild(themeWrapper);
 
     // A téma-opciókat csak azután kérdezzük le, hogy bekerültek a DOM-ba
+    // (a querySelectorAll itt statikus NodeList-et ad - nekünk pont ez kell,
+    //  mert a 33 opció a felépítés után már nem változik)
     const themeOptions = customizerPanel.querySelectorAll('.theme-option');
 
     //! ---------- MENTETT ÁLLAPOT VISSZATÖLTÉSE ----------
 
     // Mentett téma betöltése
+    //? Ha a felhasználó még sosem választott, marad a 'grey' alapértelmezés
     const savedTheme = localStorage.getItem('selectedTheme') || 'grey';
     applyTheme(savedTheme);
 
     // Mentett Low Detail Mode beállítás betöltése és alkalmazása
     const lowDetailToggle = customizerPanel.querySelector('#low-detail-toggle');
-    const savedLowDetail = localStorage.getItem('lowDetailMode') === 'true';
-    lowDetailToggle.checked = savedLowDetail;
-    applyLowDetailMode(savedLowDetail);
 
+    // A localStorage MINDENT stringként tárol, ezért kell a === 'true'
+    const savedLowDetail = localStorage.getItem('lowDetailMode') === 'true';
+
+    lowDetailToggle.checked = savedLowDetail; // a kapcsoló álljon a mentett állásba
+    applyLowDetailMode(savedLowDetail);       // és a hatása is legyen meg azonnal
+
+    // Kapcsolgatás: mentés + azonnali alkalmazás
     lowDetailToggle.addEventListener('change', () => {
         const isEnabled = lowDetailToggle.checked;
         localStorage.setItem('lowDetailMode', isEnabled);
@@ -193,38 +210,59 @@ export function initializeThemeCustomizer() {
     // Refresh Icons: minden shortcut/tool valódi favicon-jának lekérése és cache-elése
     const refreshIconsBtn = customizerPanel.querySelector('#refresh-icons-btn');
     const refreshIconsStatus = customizerPanel.querySelector('#refresh-icons-status');
+
+    // Az eredeti leírószöveg, hogy a folyamat végén vissza tudjuk állítani
     const refreshIconsDefaultStatus = refreshIconsStatus.textContent;
 
     refreshIconsBtn.addEventListener('click', () => {
+
+        // Letiltjuk a gombot, nehogy párhuzamosan több frissítés induljon
         refreshIconsBtn.disabled = true;
         refreshIconsBtn.textContent = 'Refreshing...';
 
         refreshAllIcons({
+            // A leírószöveg helyén írjuk ki, hol tart épp a folyamat
             onProgress: ({ done, total, current }) => {
                 refreshIconsStatus.textContent = `Checking ${done}/${total}: ${current}`;
             }
         }).then(({ granted, total, cached }) => {
+
+            //? A felhasználó elutasította a jogosultságkérést -> nincs mit tenni
             if (!granted) {
                 refreshIconsStatus.textContent = 'Permission was not granted, so icons were not refreshed.';
                 return;
             }
+
+            // Sikeres frissítés -> mindkét listát újrarajzoljuk az új ikonokkal
             renderShortcuts();
             renderBottomBar();
             refreshIconsStatus.textContent = `Cached real icons for ${cached}/${total} shortcuts and tools.`;
         }).catch((error) => {
+            // Itt tényleg csak váratlan hiba jöhet - a "nem találtam ikont"
+            // eset NEM hiba, azt a cached szám jelzi
             console.error('Icon refresh failed:', error);
             refreshIconsStatus.textContent = 'Something went wrong refreshing icons — check the console.';
         }).finally(() => {
+            // Akárhogy is végződött: gomb vissza használhatóra
             refreshIconsBtn.disabled = false;
             refreshIconsBtn.textContent = 'Refresh Icons';
+
+            // Az eredményt hagyjuk kint pár másodpercig, aztán vissza a leírásra
             setTimeout(() => {
                 refreshIconsStatus.textContent = refreshIconsDefaultStatus;
             }, 6000);
         });
     });
 
-    // CÉL: A Low Detail Mode tényleges alkalmazása (CSS osztály ki/be)
+    /*
+        CÉL: A Low Detail Mode tényleges alkalmazása (CSS osztály ki/be)
+        BE: enabled - true, ha a gyengébb gépekre szánt mód kell
+        MEGJEGYZÉS:
+            Maga a munka a CSS-ben van: a .low-detail osztály kikapcsolja
+            a blur/árnyék/animáció effekteket (lásd style.css)
+    */
     function applyLowDetailMode(enabled) {
+        // A toggle 2. paramétere: kényszerített be/ki állapot
         document.documentElement.classList.toggle('low-detail', enabled);
     }
 
@@ -232,12 +270,14 @@ export function initializeThemeCustomizer() {
 
     // Panel láthatóság kapcsolása
     gearButton.addEventListener('click', (e) => {
-        e.stopPropagation();
+        e.stopPropagation(); // különben a lenti "kattintás kívülre" egyből be is zárná
         customizerPanel.classList.toggle('active');
     });
 
     // Panel bezárása kívülre kattintásra
     document.addEventListener('click', (e) => {
+        // A .contains() a leszármazottakra is igaz -> a panelen belüli
+        // kattintás (pld. egy színválasztó) nem zárja be a panelt
         if (!customizerPanel.contains(e.target) && e.target !== gearButton) {
             customizerPanel.classList.remove('active');
         }
@@ -245,24 +285,35 @@ export function initializeThemeCustomizer() {
 
     //! ---------- TÉMAVÁLASZTÁS ----------
 
-    // Témaválasztás
+    // Témaválasztás: minden kis színnégyzetre egy-egy kattintáskezelő
     themeOptions.forEach(option => {
         option.addEventListener('click', () => {
+            // A téma nevét a HTML-beli data-theme attribútum hordozza
             const theme = option.dataset.theme;
-            applyTheme(theme);
-            localStorage.setItem('selectedTheme', theme);
 
-            // Aktív állapot frissítése
+            applyTheme(theme);
+            localStorage.setItem('selectedTheme', theme); // hogy újranyitáskor is megmaradjon
+
+            // Aktív állapot frissítése: előbb mindenkiről le, aztán erre az egyre rá
             themeOptions.forEach(opt => opt.classList.remove('active'));
             option.classList.add('active');
         });
     });
 
-    // CÉL: A kiválasztott téma tényleges alkalmazása (data-theme attribútummal)
+    /*
+        CÉL: A kiválasztott téma tényleges alkalmazása (data-theme attribútummal)
+        BE: theme - a téma azonosítója, pld. "blue-midnight"
+        MEGJEGYZÉS:
+            A <html> elem data-theme attribútumára a style.css-ben
+            [data-theme="..."] szelektorokkal vannak felakasztva a
+            színváltozók -> egyetlen attribútum átírása átszínezi az
+            egész oldalt, nem kell semmit kézzel újrarajzolni
+    */
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
 
         // Aktív opció frissítése
+        // (ez a betöltéskori hívás miatt is kell, nem csak kattintásra)
         themeOptions.forEach(opt => {
             opt.classList.toggle('active', opt.dataset.theme === theme);
         });

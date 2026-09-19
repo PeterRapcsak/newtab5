@@ -1,7 +1,7 @@
 /*======================================================================
     style.css - Stílusok
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Design tokenek (CSS custom property-k): térköz, tipográfia,
        lekerekítés, árnyék, szín
      - 33 választható színtéma (család + mélységi szint szerint
@@ -504,15 +504,22 @@
 body {
     font-family: var(--font-sans);
     font-size: var(--fs-base);
+
+    /* Háromállomásos átlós gradiens: a két szélén ugyanaz a szín, így a
+       középső sáv egy lágy "fénycsíkként" ül a háttéren */
     background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 50%, var(--bg-primary) 100%);
-    background-attachment: fixed;
+    background-attachment: fixed; /* görgetéskor ne csússzon el a gradiens */
+
     color: var(--text-primary);
     min-height: 100vh;
+
     display: flex;
     flex-direction: column;
+
     padding: var(--spacing-md);
-    overflow-x: hidden;
-    transition: background 0.5s ease;
+    overflow-x: hidden; /* a lebegő ghost/popover elemek ne hozzanak vízszintes görgetősávot */
+
+    transition: background 0.5s ease; /* témaváltáskor átúszik, nem ugrik */
 }
 
 /* A form-vezérlők alapból nem öröklik a body font-size-át — adjuk meg
@@ -526,18 +533,22 @@ button {
     font-size: var(--fs-base);
 }
 
+/* A :focus-visible (és nem a sima :focus) miatt a fókuszkeret csak
+   billentyűzetes navigációnál jelenik meg, egérkattintásnál nem */
 a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 [tabindex]:focus-visible {
     outline: 2px solid var(--accent-primary);
-    outline-offset: 2px;
+    outline-offset: 2px; /* egy kis levegő a keret és az elem között */
 }
 
+/* Egyedi görgetősáv. Ez a ::-webkit- prefixes szintaxis csak Chromium/
+   WebKit alapú böngészőkben működik - Firefoxban marad a natív sáv */
 ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 8px;  /* függőleges sáv */
+    height: 8px; /* vízszintes sáv */
 }
 
 ::-webkit-scrollbar-track {
@@ -558,20 +569,31 @@ select:focus-visible,
 /* Glass card — a legtöbb panelen közösen használt, áttetsző felület */
 .glass-card {
     background: var(--glass-bg);
+
+    /* A backdrop-filter a MÖGÖTTE lévő tartalmat mossa el - ettől lesz
+       "üveg" hatása. A -webkit- változat a Safari kedvéért kell.
+       Ez a legdrágább effekt az oldalon -> a Low Detail Mode ezt kapcsolja ki elsőként */
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
+
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius);
     box-shadow: var(--shadow-sm);
     transition: var(--transition);
 }
 
+/* Ráhúzáskor: egy leheletnyi accent-szín belekeverve, és a kártya
+   "megemelkedik". A color-mix() miatt ez MINDEN témában automatikusan
+   a helyes árnyalatot adja - nem kell 33 külön hover-szabály */
 .glass-card:hover {
     background: color-mix(in srgb, var(--accent-primary) 4%, var(--glass-bg));
     border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--glass-border));
-    transform: translateY(-2px);
+    transform: translateY(-2px); /* 2px-t felfelé = "emelkedik" */
     box-shadow: var(--shadow-md);
 }
+
+/* ---------- Közös animációk ---------- */
+/* Ezeket több komponens is használja, ezért itt, központilag élnek */
 
 @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(20px); }
@@ -612,8 +634,10 @@ select:focus-visible,
    komponens-szekciók csak elrendezés-specifikus szabályokat (pozíció,
    méret-felülírás) adnak hozzá.
    ================================================================== */
+/* Minden gomb közös alapja. A böngésző alapértelmezett gombstílusát
+   itt "nullázzuk le", a látványt a lenti változatok adják */
 button {
-    font-family: var(--font-sans);
+    font-family: var(--font-sans); /* a <button> alapból NEM örökli a betűtípust */
     border: none;
     cursor: pointer;
     color: inherit;
@@ -640,6 +664,9 @@ button {
     transition: var(--transition);
 }
 
+/* Ráhúzáskor a gomb "megemelkedik", és alá kerül egy accent-színű glow.
+   A negatív 4. érték (-10px) a spread: befelé húzza az árnyékot, hogy
+   szűkebb, koncentráltabb fénykör legyen belőle */
 #search-btn:hover,
 #edit-btn:hover,
 #add-shortcut-btn:hover,
@@ -650,6 +677,7 @@ button {
     box-shadow: 0 10px 24px -10px var(--accent-glow);
 }
 
+/* Lenyomva visszaül az alaphelyzetbe -> a "megnyomom" érzet */
 #search-btn:active,
 #edit-btn:active,
 #add-shortcut-btn:active,
@@ -727,28 +755,32 @@ button {
 }
 
 .compact-checkboxes label {
-    border-radius: 999px;
+    border-radius: 999px; /* bármekkora magasságnál tökéletes pill-alak */
     display: flex;
     align-items: center;
     gap: 6px;
     cursor: pointer;
-    user-select: none;
+    user-select: none; /* dupla kattintásnál ne jelölje ki a feliratot */
 }
 
 .compact-checkboxes input[type="checkbox"] {
     margin: 0;
     cursor: pointer;
+    /* Az accent-color a natív jelölőnégyzetet színezi át - így nem kell
+       az egészet kézzel újraépíteni */
     accent-color: var(--accent-primary);
 }
 
 /* --- Icon: kör alakú accent/glass gombok, kompakt segédműveletekhez --- */
+/* A flex + center páros itt az ikon vízszintes ÉS függőleges közepre
+   igazítását végzi a kör alakú gombon belül */
 .icon-btn,
 .add-shortcut-to-container,
 .theme-toggle-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
+    border-radius: 50%; /* négyzet + 50% = kör */
     cursor: pointer;
     transition: var(--transition);
 }
@@ -951,6 +983,8 @@ input[type="url"],
 input[type="tel"],
 select,
 textarea {
+    /* Átlátszó keret az alapállapotban: a helyét már most lefoglalja, így
+       a fókusz-keret megjelenése nem tolja el egy pixellel sem az elrendezést */
     border: 1.5px solid transparent;
     background: var(--bg-tertiary);
     color: var(--text-primary);
@@ -992,7 +1026,10 @@ select:focus,
 textarea:focus {
     background: var(--bg-secondary);
     border-color: var(--accent-primary);
-    outline: none;
+    outline: none; /* a natív keret helyett a lenti, lágyabb "glow" jön */
+
+    /* Nulla eltolás és elmosás, 3px terjedés = egy éles, a keretet
+       követő fénygyűrű az elem körül */
     box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
@@ -1000,6 +1037,8 @@ textarea:focus {
     cursor: pointer;
 }
 
+/* Magát a legördülő listát a rendszer rajzolja, így ennél többet nem
+   nagyon lehet rajta állítani - de a hátteret legalább be tudjuk sötétíteni */
 .compact-select option {
     background: var(--bg-secondary);
     color: var(--text-primary);
@@ -1041,10 +1080,13 @@ textarea:focus {
 /* ==================================================================
    KERESŐSÁV (SEARCH BAR)
    ================================================================== */
+/* Grid, és nem flex: a grid-template-areas miatt a HTML-beli sorrendtől
+   függetlenül, névvel lehet a helyükre tenni az elemeket (lásd a lenti
+   grid-area: search / advanced szabályokat) */
 .search-bar {
-    --control-height: 36px;
+    --control-height: 36px; /* csak itt él: a sor összes vezérlője ehhez igazodik */
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto; /* a mező nyúlik, a gombok a tartalmuk szerintiek */
     grid-template-areas: "input search advanced";
     align-items: center;
     flex-shrink: 0;
@@ -1053,12 +1095,16 @@ textarea:focus {
     border-radius: var(--border-radius-lg);
 }
 
+/* A :focus-within az egész sávra igaz, amíg BÁRMELYIK belső elem
+   (pld. a beviteli mező) fókuszban van -> gépelés közben is világít */
 .search-bar:hover,
 .search-bar:focus-within {
     box-shadow: 0 10px 28px -12px var(--accent-glow);
 }
 
 #search-q {
+    /* A min-width: 0 nélkül a flex/grid elem nem tudna a tartalmánál
+       keskenyebbre zsugorodni, és kitolná a gombokat a sorból */
     min-width: 0;
     outline: none;
     height: var(--control-height);
@@ -1076,6 +1122,7 @@ textarea:focus {
 /* ==================================================================
    RÉSZLETES KERESÉS (ADVANCED SEARCH)
    ================================================================== */
+/* Alapból rejtve - a quickTools.js adja rá az .open / .popover-panel osztályt */
 .advanced-search {
     display: none;
     padding: var(--spacing-lg);
@@ -1084,7 +1131,7 @@ textarea:focus {
 
 .advanced-search.open {
     display: block;
-    animation: slideDown 0.25s ease-out;
+    animation: slideDown 0.25s ease-out; /* felülről csúszik be */
 }
 
 .advanced-grid {
@@ -1163,6 +1210,8 @@ textarea:focus {
     flex-wrap: wrap;
 }
 
+/* A flex: 0 0 84px azt jelenti: ne nőjön, ne zsugorodjon, maradjon
+   pontosan 84px - a pénznemkódok mindig 3 betűsek, nem kell több hely */
 .exchange-form select {
     width: 84px;
     flex: 0 0 84px;
@@ -1180,26 +1229,31 @@ textarea:focus {
 }
 
 .exchange-form input[type="text"] {
-    flex: 1;
+    flex: 1;       /* ő nyeli el a maradék helyet */
     min-width: 0;
     padding: var(--spacing-sm);
-    padding-right: 24px;
+    padding-right: 24px; /* hely a jobb szélen ülő léptetőgomboknak */
     font-size: var(--fs-sm);
 }
 
+/* A ▲/▼ gombpár a mezőn BELÜL, a jobb szélen lebeg */
 .spinner-buttons {
     position: absolute;
     right: 4px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%); /* a saját magasságának felével vissza = pontos függőleges közép */
     display: flex;
-    flex-direction: column;
+    flex-direction: column; /* egymás alatt */
     gap: 0;
+
+    /* Alapból láthatatlan ÉS kattinthatatlan. Az opacity: 0 önmagában
+       még elfogná a kattintásokat, ezért kell a pointer-events is */
     opacity: 0;
     transition: opacity var(--transition-fast);
     pointer-events: none;
 }
 
+/* Ráhúzásra / fókuszra előbukkan */
 .input-with-spinner:hover .spinner-buttons,
 .input-with-spinner:focus-within .spinner-buttons {
     opacity: 1;
@@ -1243,6 +1297,8 @@ textarea:focus {
     gap: var(--spacing-sm);
 }
 
+/* A fülsáv egy "vályú": a saját háttere adja a keretet, amiben a három
+   gomb ül, és amiből az aktív kiemelkedik */
 .mode-tabs {
     display: flex;
     gap: var(--spacing-2xs);
@@ -1252,9 +1308,9 @@ textarea:focus {
 }
 
 .mode-tabs .toggle-btn {
-    flex: 1;
+    flex: 1;                /* mindhárom fül egyforma széles */
     text-align: center;
-    background: transparent;
+    background: transparent; /* a vályú háttere látszódjon át */
 }
 
 .mode-tabs .toggle-btn:hover {
@@ -1265,6 +1321,8 @@ textarea:focus {
     background: var(--accent-gradient);
 }
 
+/* A három panel (Stopwatch / Timer / Pomodoro) közül egyszerre csak az
+   látszik, amelyiken rajta van az .active osztály - ezt a timeTools.js állítja */
 .time-tool-content > div {
     display: none;
 }
@@ -1279,10 +1337,12 @@ textarea:focus {
     gap: var(--spacing-sm);
 }
 
+/* Mindhárom számláló ugyanazt a kijelző-stílust kapja, hogy fülváltáskor
+   ne "ugorjon" a kártya tartalma */
 .stopwatch .display,
 .timer .display,
 .pomodoro-panel .display {
-    font-family: var(--font-mono);
+    font-family: var(--font-mono); /* fix szélességű számjegyek */
     font-size: 2.25rem;
     font-weight: var(--fw-medium);
     letter-spacing: 0.01em;
@@ -1291,8 +1351,10 @@ textarea:focus {
     padding: var(--spacing-sm) var(--spacing-md);
     border-radius: var(--border-radius-sm);
     background: var(--bg-tertiary);
-    white-space: nowrap;
-    overflow-x: auto;
+    white-space: nowrap; /* az idő SOHA ne törjön két sorba */
+    overflow-x: auto;    /* inkább görgethető legyen, mint kilógjon */
+
+    /* Halvány fénylés az accent színnel - ettől "világít" a számláló */
     text-shadow: 0 0 14px var(--accent-glow);
     transition: var(--transition);
 }
@@ -1303,6 +1365,7 @@ textarea:focus {
     box-shadow: var(--shadow-sm), 0 0 0 1px color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }
 
+/* Lejárt visszaszámláló: piros + villogás, hogy nehéz legyen elnézni */
 .timer .display.finished {
     color: var(--danger);
     animation: pulse 1s infinite;
@@ -1321,6 +1384,9 @@ textarea:focus {
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.18);
 }
 
+/* A kitöltés szélességét a JS állítja %-ban (lásd render / updateDisplayFromSeconds).
+   A linear átmenet (nem ease) azért fontos, hogy a sáv egyenletesen
+   csússzon, ne rángatózzon másodpercenként */
 .time-progress-fill {
     height: 100%;
     width: 0%;
@@ -1330,6 +1396,10 @@ textarea:focus {
     box-shadow: 0 0 10px var(--accent-glow);
 }
 
+/* Egyetlen számjegypár. A min-width: 1.2ch és a tabular-nums együtt
+   garantálja, hogy a kijelző szélessége NE változzon attól, hogy épp
+   egy keskeny "1" vagy egy széles "8" látszik benne
+   (1ch = a "0" karakter szélessége az adott betűtípusban) */
 .digit {
     display: inline-block;
     min-width: 1.2ch;
@@ -1339,6 +1409,7 @@ textarea:focus {
     transition: var(--transition-fast);
 }
 
+/* A kattintással "felfegyverzett", gépelhető szegmens kiemelése */
 .digit.editing {
     background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 45%, transparent);
@@ -1671,6 +1742,9 @@ textarea:focus {
 /* ==================================================================
    SHORTCUT-OK
    ================================================================== */
+/* A konténerek sorokba tördelve ülnek egymás mellett. Az align-items és
+   az align-content is flex-start: a kártyák a saját tartalmuk szerinti
+   magasságot kapják, nem nyúlnak a legmagasabbhoz */
 .shortcuts-wrapper {
     display: flex;
     flex-wrap: wrap;
@@ -1710,15 +1784,19 @@ textarea:focus {
     cursor: grab;
 }
 
+/* Húzás közben az EREDETI helyén maradó kártya elhalványul (a kurzort
+   a JS-ből létrehozott dragGhost másolat követi) */
 .shortcuts-container.dragging {
     opacity: 0.3;
 }
 
+/* Érvényes ejtési célpont fölött vagyunk */
 .shortcuts-container.drag-over {
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
     outline-color: var(--accent-primary);
 }
 
+/* A "+" és a kuka gomb a kártya jobb alsó sarkában lebeg */
 .container-controls {
     position: absolute;
     bottom: var(--spacing-sm);
@@ -1726,7 +1804,7 @@ textarea:focus {
     display: flex;
     align-items: center;
     gap: var(--spacing-xs);
-    z-index: 10;
+    z-index: 10; /* a shortcut-csempék fölött */
 }
 
 .shortcuts-grid {
@@ -1734,16 +1812,20 @@ textarea:focus {
     flex-wrap: wrap;
     gap: var(--spacing-md);
     justify-content: center;
+    /* A min-height miatt egy ÜRES konténer is marad akkora, hogy bele
+       lehessen húzni egy shortcut-ot - enélkül összecsuklana */
     min-height: 80px;
     width: 100%;
     margin: 0 auto;
 }
 
+/* Átméretező fogantyú: a kártya jobb szélére "lovagol rá" (a -6px a
+   saját szélességének fele, így pont félig lóg ki) */
 .resize-handle {
     position: absolute;
     right: -6px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-50%); /* függőlegesen középre */
     width: 12px;
     height: 48px;
     background: var(--accent-gradient);
@@ -1759,6 +1841,8 @@ textarea:focus {
     z-index: 20;
 }
 
+/* FONTOS: a translateY-t itt meg kell ismételni - a transform nem
+   "adódik hozzá" az alapállapotéhoz, hanem teljesen felülírja azt */
 .resize-handle:hover {
     opacity: 1;
     transform: translateY(-50%) scaleY(1.15);
@@ -1785,15 +1869,20 @@ textarea:focus {
     font-weight: var(--fw-medium);
 }
 
+/* Egy shortcut-csempe: ikon felül, név alatta */
 .shortcut {
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--spacing-2xs);
-    position: relative;
+    position: relative; /* a törlés gomb ehhez képest pozicionálódik */
+
+    /* Az opacity: 0 a kezdőállapot, a "forwards" pedig azt mondja, hogy
+       az animáció VÉGÉN elért állapot (opacity: 1) maradjon is meg */
     animation: fadeIn 0.3s ease-out forwards;
     opacity: 0;
+
     cursor: move;
     transition: var(--transition);
 }
@@ -1821,6 +1910,8 @@ textarea:focus {
     box-shadow: 0 10px 22px -10px var(--accent-glow);
 }
 
+/* Az object-fit: cover kitölti a négyzetet, akkor is, ha a favicon
+   történetesen nem négyzetes (a széle ilyenkor levágódik) */
 .shortcut img {
     width: 100%;
     height: 100%;
@@ -1837,11 +1928,16 @@ textarea:focus {
     color: var(--text-secondary);
     font-weight: var(--fw-medium);
     max-width: calc(var(--shortcut-size, 56px) + var(--spacing-md));
+
+    /* Ez a négyes a "vágd le N sor után" bevett receptje. Régi, -webkit-
+       prefixes szintaxis, de máig ez a legszélesebb körben támogatott
+       https://css-tricks.com/line-clampin/ */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    word-break: break-word;
+
+    word-break: break-word; /* egy hosszú szó is törjön, ne lógjon ki */
 }
 
 .add-shortcut {
@@ -1856,6 +1952,7 @@ textarea:focus {
     padding: var(--spacing-sm) var(--spacing-md);
 }
 
+/* 1:7 arány - az URL-ek jóval hosszabbak, mint a nevek */
 #new-shortcut-name {
     flex: 1;
 }
@@ -1879,6 +1976,7 @@ textarea:focus {
     animation: popoverIn 0.22s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Az .open osztályt a JS teszi rá/veszi le (lásd openEditShortcutPopover) */
 .edit-shortcut-popover.open {
     display: flex;
 }
@@ -1931,6 +2029,8 @@ textarea:focus {
     gap: var(--spacing-2xs);
 }
 
+/* Egy szekció "doboza". A min-height garantálja, hogy egy ÜRES szekció
+   is marad akkora, hogy bele lehessen húzni egy elemet */
 .section-items {
     background: var(--bg-tertiary);
     backdrop-filter: blur(10px);
@@ -1952,12 +2052,16 @@ textarea:focus {
     border-color: var(--accent-primary);
 }
 
+/* Húzás közben a célszekció szaggatott kerettel és accent-színnel jelzi,
+   hogy ide lehet ejteni */
 .section-items.drag-over-section {
     background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
     border-color: var(--accent-primary);
     border-style: dashed;
 }
 
+/* Egy tool-link az alsó sávban: ikon + név, egymás MELLETT (a shortcut-
+   csempéknél viszont egymás alatt) */
 .ai-tool {
     display: inline-flex;
     align-items: center;
@@ -1979,6 +2083,8 @@ textarea:focus {
     transform: translateY(-2px);
 }
 
+/* A látszólag felesleges átlátszó keret a helyet foglalja le előre:
+   így a lenti hover-keret megjelenése nem tolja el az elrendezést */
 .ai-tool.editable {
     border: 2px solid transparent;
 }
@@ -2023,9 +2129,12 @@ textarea:focus {
 
 .qr-output {
     width: 100%;
-    aspect-ratio: 1;
+    aspect-ratio: 1;  /* mindig pontosan négyzet, akármekkora a kártya */
     max-width: 220px;
-    margin: 0 auto;
+    margin: 0 auto;   /* vízszintesen középre */
+
+    /* A háttér FIXEN fehér, témától függetlenül: egy sötét hátterű
+       QR-kódot a legtöbb olvasó nem ismerne fel */
     background: #fff;
     border-radius: var(--border-radius-sm);
     display: flex;
@@ -2050,10 +2159,12 @@ textarea:focus {
     box-shadow: var(--shadow-md);
 }
 
+/* A qrcode-generator.js scalable SVG-t ad vissza -> egyszerűen kitölti
+   a dobozt, bármekkora is az */
 .qr-output svg {
     width: 100%;
     height: 100%;
-    display: block;
+    display: block; /* a soron belüli (inline) elemek alatti rés megszüntetése */
 }
 
 .widget-not-configured {
@@ -2073,6 +2184,8 @@ textarea:focus {
 }
 
 /* --- QR teljes méretű modal --- */
+/* Teljes képernyős sötétítő réteg. Az inset: 0 a top/right/bottom/left
+   mind a négyét nullára állítja -> kifeszül az egész ablakra */
 .qr-modal-overlay {
     display: none;
     position: fixed;
@@ -2311,6 +2424,8 @@ textarea:focus {
    50px, a :root-ban beállítva) egészen 992px-ig — csak azután kezdenek
    zsugorodni, hogy a .top-section egymásra pakolódik, és a shortcut-
    oszlop ténylegesen szélességet veszít. */
+/* 1400px alatt a Valutaváltó és a Time Tools már nem fér el egymás
+   mellett -> egymás alá kerülnek */
 @media screen and (max-width: 1400px) {
     .tools-row {
         flex-direction: column;
@@ -2327,6 +2442,9 @@ textarea:focus {
     }
 }
 
+/* 992px: itt történik a nagy váltás. A két hasáb egymás alá kerül, a
+   két nagy panel pedig eltűnik, és a Quick Tools ikonjai mögé költözik
+   (a quickTools.js popoverként nyitja meg őket) */
 @media screen and (max-width: 992px) {
     .top-section {
         flex-direction: column;
@@ -2341,11 +2459,13 @@ textarea:focus {
         gap: var(--spacing-xs);
     }
 
+    /* Elrejtve - de NEM törölve: popoverként előhívhatók maradnak */
     .currency-exchanger,
     .time-tools {
         display: none;
     }
 
+    /* És itt jelennek meg helyettük az ikon-triggerek */
     .quick-tools {
         display: flex;
     }
@@ -2459,6 +2579,9 @@ textarea:focus {
    Teljesítmény miatt eltávolítja a blur-t, a mozgást és a gradienseket.
    A szín- és elrendezés-identitás megmarad; csak a drága GPU-munka esik ki.
    ================================================================== */
+/* A tokenek átírása "felülről" kapcsolja ki az összes átmenetet: minden
+   olyan szabály, ami a var(--transition)-t használja, egy csapásra
+   mozdulatlanná válik */
 .low-detail {
     --transition: none;
     --transition-fast: none;
@@ -2469,6 +2592,9 @@ textarea:focus {
     animation: none;
 }
 
+/* Biztonsági háló: ami mégis kézzel írt animation/transition-t használ,
+   azt itt, !important-tal kapjuk el. Ez az EGYETLEN hely a fájlban, ahol
+   az !important indokolt - itt épp az a cél, hogy mindent felülírjunk */
 .low-detail *,
 .low-detail *::before,
 .low-detail *::after {
@@ -2476,6 +2602,8 @@ textarea:focus {
     transition: none !important;
 }
 
+/* A backdrop-filter (üveghatás) a legdrágább effekt az oldalon - ez az
+   a szabályhalmaz, amiért a Low Detail Mode egyáltalán létezik */
 .low-detail .glass-card,
 .low-detail .search-bar,
 .low-detail .advanced-search,
@@ -2560,6 +2688,8 @@ textarea:focus {
     border-color: var(--text-secondary);
 }
 
+/* A színminták alapból gradienssel készülnek. Itt mindegyik egyetlen,
+   tömör színt kap - ezért kell mind a 33-at felsorolni (csak adat) */
 .low-detail .theme-option[data-theme="blue-deep"] { background: hsl(224 52% 63%); }
 .low-detail .theme-option[data-theme="blue-navy"] { background: hsl(221 52% 63%); }
 .low-detail .theme-option[data-theme="blue-midnight"] { background: hsl(200 52% 54%); }

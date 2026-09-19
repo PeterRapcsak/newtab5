@@ -1,7 +1,7 @@
 /*======================================================================
     currency.js - Valutaváltó
-------------------------------------------------------------------------
-    CÉL:
+----------------------------------------------------------------------
+    FELADAT:
      - Élő árfolyamok lekérése a Frankfurter API-ból (ECB adatok), és
        kétirányú átváltás: összeg -> eredmény VAGY eredmény -> összeg
        (attól függően, melyik mezőbe gépel épp a felhasználó)
@@ -9,6 +9,10 @@
        elválasztó (pld. "1.234,5")
      - Óránkénti (CACHE_EXPIRATION) memóriabeli cache-elés árfolyam-
        párononként, hogy ne kelljen minden gépelésnél újra lekérni
+
+    API: https://frankfurter.dev/
+    Megjegyzés: kulcs nélküli, ingyenes API, viszont CSAK munkanapokon
+    frissül (az ECB sem ad hétvégére árfolyamot)
 ======================================================================*/
 
 import { domElements } from './dom.js';
@@ -16,6 +20,8 @@ import { domElements } from './dom.js';
 export const exchangeRateCache = {};       // { "EUR_HUF": { rate, timestamp }, ... }
 export const CACHE_EXPIRATION = 3600000;   // 1 óra (ms)
 export let lastEditedInput = 'amount';     // melyik mezőbe gépelt utoljára a felhasználó
+// A lastEditedInput azért kell, mert <select> váltásnál nem tudjuk,
+// melyik irányba számoljunk -> abba, amit a felhasználó utoljára piszkált
 
 //! ---------- SZÁMFORMÁZÁS ----------
 
@@ -25,12 +31,22 @@ export let lastEditedInput = 'amount';     // melyik mezőbe gépelt utoljára a
     KI: formázott string, pld. 1234.5 -> "1.234,5"
 */
 function formatWithDots(value) {
+
+    // Figyelem: a sima !value a 0-ra is igaz, ezért kell a külön 0-ellenőrzés
     if (!value && value !== 0) return '';
+
     const num = Number(value);
+
     // Egész és tizedes rész szétválasztása
+    // (a toString() mindig ponttal ad vissza, a vessző csak megjelenítés)
     const [intPart, decPart] = num.toString().split('.');
+
     // Ezres elválasztó pontok hozzáadása az egész részhez
+    // \B      = ne szóhatáron álljunk (tehát a szám elejére NE tegyen pontot)
+    // (?=...) = előretekintés, maga a karakter nem fogy el
+    // https://stackoverflow.com/questions/2901102/how-to-format-a-number-with-commas-as-thousands-separators
     const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
     // Tizedes résszel együtt adjuk vissza, ha van (max 2 tizedesjegy a megjelenítéshez)
     return decPart ? `${formattedInt},${decPart.slice(0, 2)}` : formattedInt;
 }
@@ -42,8 +58,10 @@ function formatWithDots(value) {
     KI: float, vagy NaN, ha üres/érvénytelen
 */
 function parseFormattedNumber(str) {
-    if (!str) return NaN;
+    if (!str) return NaN; // üres mező -> NaN, a hívó majd lekezeli
+
     // Ezres elválasztó pontok törlése, majd a tizedesvessző pontra cserélése
+    // (a második replace szándékosan NEM globális: csak egy vessző lehet)
     return parseFloat(str.replace(/\./g, '').replace(',', '.'));
 }
 
@@ -57,11 +75,17 @@ function parseFormattedNumber(str) {
 */
 export async function loadCurrencies() {
     try {
+        // A válasz egy { "EUR": "Euro", "HUF": "Hungarian Forint", ... } objektum
         const response = await fetch('https://api.frankfurter.app/currencies');
         const currencies = await response.json();
+
+        // Minket csak a kódok (a kulcsok) érdekelnek, a teljes nevek nem
         const currencyList = Object.keys(currencies);
 
         if (domElements.currency.fromSelect && domElements.currency.toSelect) {
+
+            // Mindkét <select>-be külön <option> kell, ugyanaz az elem nem
+            // lóghat két helyen a DOM-ban (a második appendChild elmozdítaná)
             currencyList.forEach(currency => {
                 const option1 = document.createElement('option');
                 option1.value = currency;
@@ -74,12 +98,17 @@ export async function loadCurrencies() {
                 domElements.currency.toSelect.appendChild(option2);
             });
 
+            //? Alapértelmezett pár és kezdőérték beállítása
             domElements.currency.fromSelect.value = 'EUR';
             domElements.currency.toSelect.value = 'HUF';
             domElements.currency.amountInput.value = '1';
+
+            // Hogy ne üres eredménnyel induljon a kártya
             convertCurrency('amount');
         }
     } catch (error) {
+        // Nincs net / leállt az API -> a <select>-ek üresen maradnak,
+        // de az oldal többi része ettől még működik
         console.error('Error fetching currencies:', error);
     }
 }
@@ -100,31 +129,37 @@ export async function convertCurrency(source) {
     const to = domElements.currency.toSelect?.value;
     let amount, result;
 
+    //? Kiindulási érték beolvasása abból a mezőből, amit a felhasználó szerkeszt
     if (source === 'amount') {
         amount = parseFormattedNumber(domElements.currency.amountInput?.value);
+
+        // Üres vagy negatív bemenet -> a másik mezőt is ürítjük
         if (isNaN(amount) || amount < 0) {
             domElements.currency.resultInput.value = '';
             return;
         }
     } else {
         result = parseFormattedNumber(domElements.currency.resultInput?.value);
+
+        // Ugyanaz, csak fordított irányban
         if (isNaN(result) || result < 0) {
             domElements.currency.amountInput.value = '';
             return;
         }
     }
 
-    const cacheKey = `${from}_${to}`;
+    const cacheKey = `${from}_${to}`; // pld: "EUR_HUF"
     const now = Date.now();
 
     if (exchangeRateCache[cacheKey] && (now - exchangeRateCache[cacheKey].timestamp < CACHE_EXPIRATION)) {
         //? Van friss cache -> nem kell hálózati kérés
         const rate = exchangeRateCache[cacheKey].rate;
+
         if (source === 'amount') {
-            result = amount * rate;
+            result = amount * rate;  // oda
             domElements.currency.resultInput.value = formatWithDots(result);
         } else {
-            amount = result / rate;
+            amount = result / rate;  // vissza
             domElements.currency.amountInput.value = formatWithDots(amount);
         }
     } else {
@@ -132,8 +167,13 @@ export async function convertCurrency(source) {
         try {
             const response = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`);
             const data = await response.json();
+
+            // A válasz: { "rates": { "HUF": 395.2 }, ... } -> csak a célpénznem kell
             const rate = data.rates[to];
+
+            // Eltesszük, hogy a következő gépelésnél már a cache-ből menjen
             exchangeRateCache[cacheKey] = { rate, timestamp: now };
+
             if (source === 'amount') {
                 result = amount * rate;
                 domElements.currency.resultInput.value = formatWithDots(result);
@@ -142,6 +182,7 @@ export async function convertCurrency(source) {
                 domElements.currency.amountInput.value = formatWithDots(amount);
             }
         } catch (error) {
+            // Sikertelen lekérés -> inkább semmit ne írjunk ki, mint rosszat
             console.error('Error fetching exchange rate:', error);
             domElements.currency.resultInput.value = '';
             domElements.currency.amountInput.value = '';
@@ -160,6 +201,8 @@ export async function convertCurrency(source) {
        megfelelő helyen maradjon (ne ugorjon a mező végére minden leütésnél)
 */
 function formatInputLive(input) {
+
+    // Ezeket MÉG a felülírás előtt le kell menteni, utána már késő
     const cursorPos = input.selectionStart;
     const oldValue = input.value;
     const oldLength = oldValue.length;
@@ -170,26 +213,34 @@ function formatInputLive(input) {
     // Csak egy vessző lehet
     const commaIndex = rawValue.indexOf(',');
     if (commaIndex !== -1) {
+        // Az első vessző előtti rész marad, utána minden további vesszőt kidobunk
         const beforeComma = rawValue.slice(0, commaIndex).replace(/,/g, '');
+
+        // A tizedes részt egyből 2 jegyre is vágjuk
         const afterComma = rawValue.slice(commaIndex + 1).replace(/,/g, '').slice(0, 2);
+
         rawValue = beforeComma + ',' + afterComma;
     }
 
     // Vessző mentén szétválasztjuk, hogy csak az egész részt formázzuk
     const [intPart, decPart] = rawValue.split(',');
 
-    // Egész rész formázása ezres elválasztó pontokkal
+    // Egész rész formázása ezres elválasztó pontokkal (ua. a regex, mint fentebb)
     const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 
     // Visszaillesztés
+    // (decPart lehet üres string is - pld. "1234," -> ilyenkor is kell a vessző,
+    //  ezért !== undefined a feltétel, és nem sima igazságérték-vizsgálat)
     const formattedValue = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt;
 
     input.value = formattedValue;
 
     // Kurzorpozíció korrigálása a formázás által okozott hosszkülönbséggel
+    // (ha beszúrtunk egy ezres pontot, a kurzornak is egyet arrébb kell ugrania)
+    // https://stackoverflow.com/questions/22574295/how-to-keep-the-cursor-position-after-formatting-an-input
     const newLength = formattedValue.length;
     const diff = newLength - oldLength;
-    const newCursorPos = Math.max(0, cursorPos + diff);
+    const newCursorPos = Math.max(0, cursorPos + diff); // a mező elejénél nem mehet negatívba
     input.setSelectionRange(newCursorPos, newCursorPos);
 }
 
@@ -198,14 +249,19 @@ function formatInputLive(input) {
 // CÉL: A ▲/▼ léptetőgombok bekötése (±1 az adott mezőn, majd újraszámolás)
 function setupSpinnerButtons() {
     const spinnerButtons = document.querySelectorAll('.spinner-btn');
+
     spinnerButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {
-            e.preventDefault();
+            e.preventDefault(); // nehogy form-submit legyen belőle
+
+            // A HTML-ben data-target mondja meg, melyik mezőhöz tartozik a gomb
             const targetId = btn.dataset.target;
             const input = document.getElementById(targetId);
             if (!input) return;
 
+            // Üres mezőből 0-ról indulunk (a || 0 a NaN-t is elkapja)
             const currentValue = parseFormattedNumber(input.value) || 0;
+
             const isUp = btn.classList.contains('spinner-up');
             const newValue = isUp ? currentValue + 1 : Math.max(0, currentValue - 1); // nem mehet negatívba
 
@@ -229,17 +285,23 @@ function setupSpinnerButtons() {
        az átváltás
 */
 export function setupCurrencyInputs() {
+
+    // Közös időzítő: minden új esemény eldobja az előzőt (debounce)
     let debounceTimer;
+
+    //? "-ból/-ből" összeg mező
     if (domElements.currency.amountInput) {
         domElements.currency.amountInput.addEventListener('input', () => {
-            formatInputLive(domElements.currency.amountInput);
+            formatInputLive(domElements.currency.amountInput); // formázás AZONNAL
             lastEditedInput = 'amount';
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                convertCurrency('amount');
+                convertCurrency('amount'); // átváltás viszont csak 300ms szünet után
             }, 300);
         });
     }
+
+    //? "-ba/-be" eredmény mező (visszafelé számol)
     if (domElements.currency.resultInput) {
         domElements.currency.resultInput.addEventListener('input', () => {
             formatInputLive(domElements.currency.resultInput);
@@ -250,6 +312,8 @@ export function setupCurrencyInputs() {
             }, 300);
         });
     }
+
+    //? Pénznem-váltás: nem tudjuk melyik irány kell -> lastEditedInput dönt
     if (domElements.currency.fromSelect) {
         domElements.currency.fromSelect.addEventListener('change', () => {
             clearTimeout(debounceTimer);
