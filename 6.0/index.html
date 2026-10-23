@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<!--======================================================================
+    index.html - A New Tab oldal fő HTML váza (6.0)
+----------------------------------------------------------------------
+     - Statikus váz: keresősáv + részletes keresés, Quick Tools ikonok,
+       valutaváltó, Time Tools (Stopwatch/Timer/Pomodoro), QR-widget,
+       shortcut-ok, alsó eszköztár, page controls
+     - A dinamikus tartalmat a scripts/*.js modulok töltik fel
+     - Ikonok: a lenti inline SVG sprite (<use href="#i-...">) - nincs
+       több Font Awesome CDN, minden helyben van, hálózat nélkül
+======================================================================-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Tab</title>
+
+    <link rel="icon" href="favicon/home16.png" type="image/png">
+    <link rel="shortcut icon" href="favicon.ico">
+
+    <link rel="preload" href="fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Szinkron: a mentett témát az első festés ELŐTT teszi fel -->
+    <script src="scripts/boot.js"></script>
+    <script type="module" src="scripts/main.js"></script>
+</head>
+<body>
+    <!-- Ikon sprite (lucide-stílusú, 24x24, stroke = currentColor) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+        <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18M7 6h1v4m8.71 3.88.7.71-2.82 2.82"/></symbol>
+        <symbol id="i-stopwatch" viewBox="0 0 24 24"><path d="M10 2h4M12 14l3-3"/><circle cx="12" cy="14" r="8"/></symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></symbol>
+        <symbol id="i-pause" viewBox="0 0 24 24"><rect fill="currentColor" x="6" y="4" width="4" height="16" rx="1"/><rect fill="currentColor" x="14" y="4" width="4" height="16" rx="1"/></symbol>
+        <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+        <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+        <symbol id="i-import" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+        <symbol id="i-qr" viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14h1v1M17 20h4M14 20h.01M20 17v.01"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+        <symbol id="i-export" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+    </svg>
+
+    <div class="top-section">
+        <div class="left-half">
+            <!-- Keresősáv (search.js) -->
+            <div class="search-bar glass-card">
+                <input type="text" id="search-q" placeholder="Search the web..." autocomplete="off">
+                <button id="search-btn" class="btn-primary" aria-label="Search"><svg class="i"><use href="#i-search"/></svg><span>Search</span></button>
+                <button type="button" id="advanced-btn" class="icon-btn" title="Advanced search" aria-label="Toggle advanced search">
+                    <svg class="i"><use href="#i-sliders"/></svg>
+                </button>
+                <!-- Quick Tools: kompakt elrendezésben ezek nyitják a widgeteket popoverként (main.js) -->
+                <button type="button" class="icon-btn quick-tool" id="quick-currency-btn" title="Currency converter" aria-label="Open currency converter">
+                    <svg class="i"><use href="#i-coins"/></svg>
+                </button>
+                <button type="button" class="icon-btn quick-tool" id="quick-time-btn" title="Stopwatch & timer" aria-label="Open stopwatch and timer">
+                    <svg class="i"><use href="#i-stopwatch"/></svg>
+                </button>
+                <button type="button" class="icon-btn quick-tool" id="quick-qr-btn" title="QR code" aria-label="Open QR code generator">
+                    <svg class="i"><use href="#i-qr"/></svg>
+                </button>
+            </div>
+
+            <!-- Részletes keresés: mindig popoverként nyílik (search.js olvassa) -->
+            <div id="advanced-search" class="advanced-search glass-card">
+                <div class="advanced-grid">
+                    <div class="advanced-row advanced-engine-row">
+                        <select id="search-engine-select" class="compact-select">
+                            <option value="google">Google</option>
+                            <option value="bing">Bing</option>
+                            <option value="duckduckgo">DuckDuckGo</option>
+                            <option value="brave">Brave</option>
+                            <option value="yandex">Yandex</option>
+                            <option value="startpage">Startpage</option>
+                            <option value="baidu">Baidu</option>
+                        </select>
+                        <select id="adv-date-range" class="compact-select">
+                            <option value="">Any date</option>
+                            <option value="d">Last 24h</option>
+                            <option value="w">Last week</option>
+                            <option value="m">Last month</option>
+                            <option value="y">Last year</option>
+                        </select>
+                    </div>
+                    <div class="advanced-group">
+                        <input type="text" id="adv-all-words" placeholder="All these words">
+                        <input type="text" id="adv-exact-phrase" placeholder="Exact phrase">
+                    </div>
+                    <div class="advanced-group">
+                        <input type="text" id="adv-any-words" placeholder="Any of these words">
+                        <input type="text" id="adv-none-words" placeholder="None of these words">
+                    </div>
+                    <div class="compact-checkboxes">
+                        <label><input type="checkbox" value="pdf">PDF</label>
+                        <label><input type="checkbox" value="doc">DOC</label>
+                        <label><input type="checkbox" value="docx">DOCX</label>
+                        <label><input type="checkbox" value="xls">XLS</label>
+                        <label><input type="checkbox" value="xlsx">XLSX</label>
+                        <label><input type="checkbox" value="ppt">PPT</label>
+                        <label><input type="checkbox" value="pptx">PPTX</label>
+                        <label><input type="checkbox" value="txt">TXT</label>
+                        <label><input type="checkbox" value="html">HTML</label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tools-row">
+                <!-- Valutaváltó (currency.js) -->
+                <div class="currency-exchanger glass-card">
+                    <form class="exchange-form">
+                        <div class="currency-row">
+                            <select id="from-currency"></select>
+                            <div class="input-with-spinner">
+                                <input type="text" id="amount" inputmode="decimal" placeholder="Amount">
+                                <div class="spinner-buttons">
+                                    <button type="button" class="spinner-btn" data-target="amount" data-step="1">▲</button>
+                                    <button type="button" class="spinner-btn" data-target="amount" data-step="-1">▼</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="currency-row">
+                            <select id="to-currency"></select>
+                            <div class="input-with-spinner">
+                                <input type="text" id="result" inputmode="decimal" placeholder="Result">
+                                <div class="spinner-buttons">
+                                    <button type="button" class="spinner-btn" data-target="result" data-step="1">▲</button>
+                                    <button type="button" class="spinner-btn" data-target="result" data-step="-1">▼</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Time Tools (timeTools.js + pomodoro.js) -->
+                <div class="time-tools glass-card">
+                    <div class="mode-tabs">
+                        <button class="toggle-btn active" data-target="stopwatch">Stopwatch</button>
+                        <button class="toggle-btn" data-target="timer">Timer</button>
+                        <button class="toggle-btn" data-target="pomodoro">Pomodoro</button>
+                    </div>
+                    <div class="time-tool-content">
+                        <!-- A számjegy-span-ok fixek, a JS csak a textContent-jüket írja -->
+                        <div class="stopwatch active">
+                            <div class="display"><span class="sw-h"><span class="digit"></span><span class="time-segment">:</span></span><span class="sw-m"><span class="digit"></span><span class="time-segment">:</span></span><span class="digit sw-s">0</span><span class="time-segment">.</span><span class="digit sw-cs">00</span></div>
+                        </div>
+                        <div class="timer">
+                            <div class="display" tabindex="0">
+                                <span class="digit hours">00</span><span class="time-segment">:</span><span class="digit minutes">00</span><span class="time-segment">:</span><span class="digit seconds">00</span>
+                            </div>
+                            <div class="time-progress"><div class="time-progress-fill" id="timer-progress-fill"></div></div>
+                        </div>
+                        <div class="pomodoro-panel">
+                            <div class="display">
+                                <span id="pomodoro-time"><span class="digit">25</span><span class="time-segment">:</span><span class="digit">00</span></span>
+                                <div class="pomodoro-header">
+                                    <span class="pomodoro-phase" id="pomodoro-phase">FOCUS</span>
+                                    <button type="button" class="icon-btn pomodoro-settings-btn" id="pomodoro-settings-btn" title="Pomodoro settings" aria-label="Pomodoro settings">
+                                        <svg class="i"><use href="#i-gear"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="time-progress"><div class="time-progress-fill" id="pomodoro-progress-fill"></div></div>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button class="start-stop btn-primary"><svg class="i"><use href="#i-play"/></svg><span>Start</span></button>
+                        <button class="reset action-btn" aria-label="Reset"><svg class="i"><use href="#i-reset"/></svg></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QR-kód generátor (qrWidget.js) -->
+            <div class="qr-widget glass-card" id="qr-widget">
+                <input type="text" id="qr-input" class="qr-input" placeholder="Paste text or a URL…" autocomplete="off" spellcheck="false">
+                <div class="qr-output" id="qr-output" hidden></div>
+            </div>
+        </div>
+
+        <!-- Shortcut-ok (shortcuts.js) -->
+        <div class="right-half">
+            <div id="shortcuts-wrapper" class="shortcuts-wrapper"></div>
+        </div>
+    </div>
+
+    <!-- Alsó dokk: eszköztár (bottomBar.js) + Settings/Import/Export/Edit (main.js, settingsPanel.js) -->
+    <footer class="bottom-dock">
+        <div class="bottom-section"></div>
+        <div class="page-controls" id="page-controls"></div>
+    </footer>
+</body>
+</html>
